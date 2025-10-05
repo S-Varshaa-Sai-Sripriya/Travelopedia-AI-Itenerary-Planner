@@ -29,33 +29,36 @@ cd AI-Itenary
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
 
-# 2. Install dependencies
+# 2. Install dependencies (Updated for Python 3.13 compatibility)
 pip install -r requirements.txt
 
 # 3. Environment setup
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys (optional for basic testing)
 
 # 4. Initialize database
 python scripts/init_db.py
 
-# 5. Start Redis
-redis-server  # or brew services start redis
-
-# 6. Start the app
-uvicorn app.main:app --reload
+# 5. Start the app
+source venv/bin/activate && uvicorn app.main:app --reload --port 8000
 ```
 
-**✅ Success!** Visit http://localhost:8000
+**✅ Success!** Visit http://127.0.0.1:8000
 
 ## 🎯 Quick Test
 
 ```bash
+# Always activate venv first
+source venv/bin/activate
+
 # Test the API
-curl http://localhost:8000/api/v1/health
+curl http://127.0.0.1:8000/
 
 # View API docs
-open http://localhost:8000/api/docs
+open http://127.0.0.1:8000/api/docs
+
+# Run tests
+python -m pytest tests/ -v
 ```
 
 ## 🏗️ Project Structure
@@ -90,7 +93,23 @@ docker-compose up -d
 docker-compose logs -f app
 ```
 
-## 🚨 Need Help?
+## � Setup Verification
+
+After completing setup, you should see:
+
+✅ **Dependencies installed**: All packages from requirements.txt
+✅ **Database initialized**: SQLite with sample data
+✅ **Demo user created**: `demo@example.com` / `demo123`
+✅ **Tests passing**: 3/3 health tests pass
+✅ **Server running**: FastAPI on http://127.0.0.1:8000
+
+## ⚠️ Python 3.13 Notes
+
+- **Updated dependencies**: Some packages updated for Python 3.13 compatibility
+- **Removed psycopg2-binary**: Replaced with asyncpg for PostgreSQL (optional)
+- **Always use venv**: Remember to activate virtual environment for all commands
+
+## �🚨 Need Help?
 
 1. **Check SETUP.md** for detailed instructions
 2. **Create GitHub Issue** for bugs

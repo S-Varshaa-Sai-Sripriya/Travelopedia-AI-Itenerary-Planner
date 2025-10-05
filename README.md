@@ -49,22 +49,28 @@ User Request → LLM Orchestrator → Real-time APIs → Personalization (GNN) �
    ```bash
    pip install -r requirements.txt
    ```
+   *Note: Updated for Python 3.13 compatibility - some packages versions adjusted*
 
 4. **Environment setup**
    ```bash
    cp .env.example .env
    # Edit .env with your API keys (see API Keys section below)
+   # Note: Demo works without API keys for basic testing
    ```
 
 5. **Initialize database**
    ```bash
    python scripts/init_db.py
    ```
+   *Creates SQLite database with tables and demo user (demo@example.com / demo123)*
 
 6. **Start the development server**
    ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   # Always activate venv first for any command
+   source venv/bin/activate
+   uvicorn app.main:app --reload --port 8000
    ```
+   *Server will run on http://127.0.0.1:8000*
 
 ## Project Structure
 
@@ -142,6 +148,9 @@ CALENDAR_WEBHOOK_URL=your-webhook-url  # For calendar sync
 
 ### 1. Feature Development
 ```bash
+# Always activate venv first
+source venv/bin/activate
+
 # Create feature branch
 git checkout -b feature/your-feature-name
 
@@ -160,11 +169,14 @@ git push origin feature/your-feature-name
 
 ### 2. Testing
 ```bash
+# Always activate venv first
+source venv/bin/activate
+
 # Run all tests
-pytest
+python -m pytest tests/ -v
 
 # Run specific test file
-pytest tests/test_agents/test_llm_orchestrator.py
+pytest tests/test_health.py
 
 # Run with coverage
 pytest --cov=app tests/
@@ -172,6 +184,9 @@ pytest --cov=app tests/
 
 ### 3. Code Quality
 ```bash
+# Always activate venv first
+source venv/bin/activate
+
 # Format code
 black .
 
@@ -284,11 +299,39 @@ docker-compose up -d
 
 ## Timeline Alignment
 
+## ✅ Setup Verification
+
+After completing the installation, verify your setup:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate
+
+# Run tests (should pass 3/3)
+python -m pytest tests/ -v
+
+# Start server
+uvicorn app.main:app --reload --port 8000
+
+# Test API endpoints
+curl http://127.0.0.1:8000/  # Root endpoint
+open http://127.0.0.1:8000/api/docs  # API documentation
+```
+
+**Expected Results:**
+- ✅ All tests pass (3/3 health tests)
+- ✅ Server starts without errors
+- ✅ API documentation accessible
+- ✅ Demo user created: `demo@example.com` / `demo123`
+- ✅ SQLite database created: `travel_planner.db`
+
 ### Week 1: Project Setup & Data Engineering ✅
 - [x] Base project structure
 - [x] API integrations setup
 - [x] Database schema design
 - [x] Development environment
+- [x] Python 3.13 compatibility
+- [x] Demo data and testing
 
 ### Week 2-3: GNN/Multi-modal Development
 - [ ] User profile modeling
