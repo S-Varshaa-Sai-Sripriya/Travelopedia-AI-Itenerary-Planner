@@ -16,16 +16,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-here-change-in-production"
     DATABASE_URL: str = "sqlite:///./travel_planner.db"
     
-    # AI/LLM Configuration
-    OPENAI_API_KEY: Optional[str] = None
-    HUGGINGFACE_API_KEY: Optional[str] = None
+    # AI/LLM Configuration (Completely Free)
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     
-    # Travel APIs
+    # Travel APIs (All Completely Free)
     OPENWEATHER_API_KEY: Optional[str] = None
     AVIATIONSTACK_API_KEY: Optional[str] = None
     FIXER_API_KEY: Optional[str] = None
-    BOOKING_API_KEY: Optional[str] = None
     
     # Infrastructure
     REDIS_URL: str = "redis://localhost:6379"

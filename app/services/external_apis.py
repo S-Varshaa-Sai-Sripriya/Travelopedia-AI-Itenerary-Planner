@@ -297,7 +297,7 @@ class FlightService(ExternalAPIService):
 
 
 class HotelService(ExternalAPIService):
-    """Hotel search service using free APIs"""
+    """Hotel and accommodation search using OpenStreetMap and Overpass API (completely free)"""
     
     async def search_hotels(
         self,
@@ -307,11 +307,177 @@ class HotelService(ExternalAPIService):
         guests: int = 2,
         budget_range: str = "mid-range"
     ) -> Dict[str, Any]:
-        """Search for hotels (mock implementation - replace with actual API)"""
-        # TODO: Integrate with free hotel APIs like Booking.com's partner API
-        # For now, return mock data
+        """Search for hotels using Overpass API (completely free)"""
         
-        return self._get_mock_hotel_data(destination, check_in, check_out, guests, budget_range)
+        try:
+            # First, get coordinates for the destination using Nominatim
+            coordinates = await self._get_coordinates(destination)
+            if not coordinates:
+                return self._get_mock_hotel_data(destination, check_in, check_out, guests, budget_range)
+            
+            lat, lon = coordinates
+            
+            # Search for accommodations using Overpass API
+            accommodations = await self._search_overpass_accommodations(lat, lon)
+            
+            # Process and return results
+            return self._process_accommodation_data(accommodations, destination, check_in, check_out, guests, budget_range)
+            
+        except Exception as e:
+            self.logger.error("Error fetching hotel data from free APIs", error=str(e))
+            return self._get_mock_hotel_data(destination, check_in, check_out, guests, budget_range)
+    
+    async def _get_coordinates(self, destination: str) -> Optional[tuple]:
+        """Get coordinates using Nominatim (free)"""
+        try:
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": destination,
+                "format": "json",
+                "limit": 1,
+                "addressdetails": 1
+            }
+            headers = {"User-Agent": "AI-Travel-Planner/1.0"}
+            
+            async with self.session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data:
+                        return float(data[0]["lat"]), float(data[0]["lon"])
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error("Error getting coordinates", error=str(e))
+            return None
+    
+    async def _search_overpass_accommodations(self, lat: float, lon: float, radius: int = 5000) -> List[Dict]:
+        """Search for accommodations using Overpass API (free)"""
+        try:
+            # Overpass API query for hotels, hostels, and guesthouses
+            overpass_query = f"""
+            [out:json][timeout:25];
+            (
+              node["tourism"~"^(hotel|hostel|guest_house|motel|apartment)$"](around:{radius},{lat},{lon});
+              way["tourism"~"^(hotel|hostel|guest_house|motel|apartment)$"](around:{radius},{lat},{lon});
+              relation["tourism"~"^(hotel|hostel|guest_house|motel|apartment)$"](around:{radius},{lat},{lon});
+            );
+            out center meta;
+            """
+            
+            url = "https://overpass-api.de/api/interpreter"
+            headers = {"User-Agent": "AI-Travel-Planner/1.0"}
+            
+            async with self.session.post(url, data=overpass_query, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("elements", [])
+            
+            return []
+            
+        except Exception as e:
+            self.logger.error("Error querying Overpass API", error=str(e))
+            return []
+    
+    def _process_accommodation_data(
+        self, 
+        elements: List[Dict], 
+        destination: str, 
+        check_in: str, 
+        check_out: str, 
+        guests: int, 
+        budget_range: str
+    ) -> Dict[str, Any]:
+        """Process Overpass API accommodation data"""
+        
+        accommodations = []
+        price_ranges = {
+            "budget": (30, 80),
+            "mid-range": (80, 200),
+            "luxury": (200, 500)
+        }
+        min_price, max_price = price_ranges.get(budget_range, (80, 200))
+        
+        for element in elements[:20]:  # Limit to first 20 results
+            tags = element.get("tags", {})
+            
+            # Extract accommodation info
+            name = tags.get("name", f"Accommodation {element.get('id', 'Unknown')}")
+            tourism_type = tags.get("tourism", "hotel")
+            
+            # Estimate price based on type and location
+            type_multipliers = {
+                "hotel": 1.0,
+                "hostel": 0.4,
+                "guest_house": 0.6,
+                "motel": 0.7,
+                "apartment": 0.8
+            }
+            
+            multiplier = type_multipliers.get(tourism_type, 1.0)
+            estimated_price = int((min_price + max_price) / 2 * multiplier)
+            
+            # Get coordinates
+            if element["type"] == "node":
+                acc_lat, acc_lon = element["lat"], element["lon"]
+            else:
+                center = element.get("center", {})
+                acc_lat, acc_lon = center.get("lat", 0), center.get("lon", 0)
+            
+            accommodation = {
+                "name": name,
+                "type": tourism_type,
+                "price_per_night": estimated_price,
+                "total_price": estimated_price * 3,  # Assuming 3 nights
+                "rating": float(tags.get("stars", "0") or "4.0"),
+                "amenities": self._extract_amenities(tags),
+                "address": tags.get("addr:full") or tags.get("addr:street", "Address not available"),
+                "phone": tags.get("phone", ""),
+                "website": tags.get("website", ""),
+                "coordinates": {"lat": acc_lat, "lon": acc_lon},
+                "source": "OpenStreetMap",
+                "osm_id": element.get("id")
+            }
+            
+            accommodations.append(accommodation)
+        
+        return {
+            "destination": destination,
+            "check_in": check_in,
+            "check_out": check_out,
+            "guests": guests,
+            "budget_range": budget_range,
+            "accommodations": accommodations,
+            "total_found": len(accommodations),
+            "search_timestamp": datetime.utcnow().isoformat(),
+            "data_source": "OpenStreetMap + Overpass API (free)"
+        }
+    
+    def _extract_amenities(self, tags: Dict[str, str]) -> List[str]:
+        """Extract amenities from OSM tags"""
+        amenities = []
+        
+        # Check for common amenities in tags
+        amenity_mapping = {
+            "wifi": ["internet_access", "wifi"],
+            "parking": ["parking"],
+            "restaurant": ["restaurant"],
+            "bar": ["bar"],
+            "pool": ["swimming_pool"],
+            "gym": ["fitness_centre", "gym"],
+            "spa": ["spa"],
+            "air_conditioning": ["air_conditioning"],
+            "pets_allowed": ["pets"],
+            "breakfast": ["breakfast"]
+        }
+        
+        for amenity, tag_keys in amenity_mapping.items():
+            for tag_key in tag_keys:
+                if tags.get(tag_key) in ["yes", "true", "1"] or tag_key in tags:
+                    amenities.append(amenity)
+                    break
+        
+        return amenities
     
     def _get_mock_hotel_data(self, destination: str, check_in: str, check_out: str, 
                            guests: int, budget_range: str) -> Dict[str, Any]:
@@ -439,5 +605,345 @@ class CurrencyService(ExternalAPIService):
             "base_currency": base_currency,
             "rates": filtered_rates,
             "timestamp": datetime.utcnow().timestamp(),
+            "data_source": "mock"
+        }
+
+
+class POIService(ExternalAPIService):
+    """Points of Interest service using OpenStreetMap and Overpass API (completely free)"""
+    
+    async def search_attractions(
+        self,
+        destination: str,
+        categories: List[str] = None,
+        radius: int = 10000
+    ) -> Dict[str, Any]:
+        """Search for attractions and activities using Overpass API"""
+        
+        if categories is None:
+            categories = ["tourism", "amenity", "leisure", "historic"]
+        
+        try:
+            # Get destination coordinates
+            coordinates = await self._get_coordinates(destination)
+            if not coordinates:
+                return self._get_mock_poi_data(destination, categories)
+            
+            lat, lon = coordinates
+            
+            # Search for POIs using Overpass API
+            pois = await self._search_overpass_pois(lat, lon, categories, radius)
+            
+            # Process and return results
+            return self._process_poi_data(pois, destination, categories)
+            
+        except Exception as e:
+            self.logger.error("Error fetching POI data from free APIs", error=str(e))
+            return self._get_mock_poi_data(destination, categories)
+    
+    async def _get_coordinates(self, destination: str) -> Optional[tuple]:
+        """Get coordinates using Nominatim (free)"""
+        try:
+            url = "https://nominatim.openstreetmap.org/search"
+            params = {
+                "q": destination,
+                "format": "json",
+                "limit": 1,
+                "addressdetails": 1
+            }
+            headers = {"User-Agent": "AI-Travel-Planner/1.0"}
+            
+            async with self.session.get(url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if data:
+                        return float(data[0]["lat"]), float(data[0]["lon"])
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error("Error getting coordinates for POI search", error=str(e))
+            return None
+    
+    async def _search_overpass_pois(
+        self, 
+        lat: float, 
+        lon: float, 
+        categories: List[str], 
+        radius: int
+    ) -> List[Dict]:
+        """Search for POIs using Overpass API"""
+        try:
+            # Build Overpass query for different POI categories
+            category_queries = []
+            
+            if "tourism" in categories:
+                category_queries.append(f'node["tourism"](around:{radius},{lat},{lon});')
+                category_queries.append(f'way["tourism"](around:{radius},{lat},{lon});')
+            
+            if "amenity" in categories:
+                category_queries.append(f'node["amenity"~"^(restaurant|cafe|bar|pub|museum|theatre|cinema)$"](around:{radius},{lat},{lon});')
+                category_queries.append(f'way["amenity"~"^(restaurant|cafe|bar|pub|museum|theatre|cinema)$"](around:{radius},{lat},{lon});')
+            
+            if "leisure" in categories:
+                category_queries.append(f'node["leisure"](around:{radius},{lat},{lon});')
+                category_queries.append(f'way["leisure"](around:{radius},{lat},{lon});')
+            
+            if "historic" in categories:
+                category_queries.append(f'node["historic"](around:{radius},{lat},{lon});')
+                category_queries.append(f'way["historic"](around:{radius},{lat},{lon});')
+            
+            overpass_query = f"""
+            [out:json][timeout:30];
+            (
+              {chr(10).join(category_queries)}
+            );
+            out center meta;
+            """
+            
+            url = "https://overpass-api.de/api/interpreter"
+            headers = {"User-Agent": "AI-Travel-Planner/1.0"}
+            
+            async with self.session.post(url, data=overpass_query, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("elements", [])
+            
+            return []
+            
+        except Exception as e:
+            self.logger.error("Error querying Overpass API for POIs", error=str(e))
+            return []
+    
+    def _process_poi_data(
+        self, 
+        elements: List[Dict], 
+        destination: str, 
+        categories: List[str]
+    ) -> Dict[str, Any]:
+        """Process Overpass API POI data"""
+        
+        pois = []
+        
+        for element in elements[:50]:  # Limit to first 50 results
+            tags = element.get("tags", {})
+            
+            # Skip elements without names (usually not interesting for tourists)
+            name = tags.get("name")
+            if not name:
+                continue
+            
+            # Determine POI type and category
+            poi_type = self._determine_poi_type(tags)
+            if not poi_type:
+                continue
+            
+            # Get coordinates
+            if element["type"] == "node":
+                poi_lat, poi_lon = element["lat"], element["lon"]
+            else:
+                center = element.get("center", {})
+                poi_lat, poi_lon = center.get("lat", 0), center.get("lon", 0)
+            
+            # Extract additional information
+            description = self._generate_description(tags, poi_type)
+            
+            poi = {
+                "name": name,
+                "type": poi_type,
+                "category": self._get_category_from_tags(tags),
+                "description": description,
+                "address": self._format_address(tags),
+                "coordinates": {"lat": poi_lat, "lon": poi_lon},
+                "opening_hours": tags.get("opening_hours", "Unknown"),
+                "phone": tags.get("phone", ""),
+                "website": tags.get("website", ""),
+                "wikipedia": tags.get("wikipedia", ""),
+                "rating": self._estimate_rating(tags),
+                "price_level": self._estimate_price_level(tags, poi_type),
+                "accessibility": self._check_accessibility(tags),
+                "source": "OpenStreetMap",
+                "osm_id": element.get("id"),
+                "last_updated": element.get("timestamp", "")
+            }
+            
+            pois.append(poi)
+        
+        # Sort by estimated popularity/rating
+        pois.sort(key=lambda x: x["rating"], reverse=True)
+        
+        return {
+            "destination": destination,
+            "categories": categories,
+            "pois": pois,
+            "total_found": len(pois),
+            "search_timestamp": datetime.utcnow().isoformat(),
+            "data_source": "OpenStreetMap + Overpass API (free)"
+        }
+    
+    def _determine_poi_type(self, tags: Dict[str, str]) -> Optional[str]:
+        """Determine POI type from OSM tags"""
+        if "tourism" in tags:
+            return tags["tourism"]
+        elif "amenity" in tags:
+            return tags["amenity"]
+        elif "leisure" in tags:
+            return tags["leisure"]
+        elif "historic" in tags:
+            return "historic_site"
+        return None
+    
+    def _get_category_from_tags(self, tags: Dict[str, str]) -> str:
+        """Get general category from specific tags"""
+        tourism_attractions = ["attraction", "museum", "zoo", "aquarium", "theme_park", "viewpoint"]
+        tourism_culture = ["artwork", "gallery", "theatre", "opera", "monument"]
+        amenity_food = ["restaurant", "cafe", "bar", "pub", "fast_food"]
+        leisure_activities = ["park", "garden", "sports_centre", "swimming_pool", "golf_course"]
+        
+        poi_type = self._determine_poi_type(tags)
+        
+        if poi_type in tourism_attractions:
+            return "attraction"
+        elif poi_type in tourism_culture:
+            return "culture"
+        elif poi_type in amenity_food:
+            return "food_drink"
+        elif poi_type in leisure_activities:
+            return "recreation"
+        elif tags.get("historic"):
+            return "historic"
+        else:
+            return "other"
+    
+    def _generate_description(self, tags: Dict[str, str], poi_type: str) -> str:
+        """Generate a description from OSM tags"""
+        description_parts = []
+        
+        if "description" in tags:
+            return tags["description"]
+        
+        # Build description from available tags
+        if poi_type == "museum":
+            description_parts.append("Museum")
+        elif poi_type == "restaurant":
+            cuisine = tags.get("cuisine", "")
+            if cuisine:
+                description_parts.append(f"{cuisine.title()} restaurant")
+            else:
+                description_parts.append("Restaurant")
+        elif poi_type == "attraction":
+            description_parts.append("Tourist attraction")
+        elif poi_type == "park":
+            description_parts.append("Park")
+        else:
+            description_parts.append(poi_type.replace("_", " ").title())
+        
+        # Add additional details
+        if "building:levels" in tags:
+            levels = tags["building:levels"]
+            description_parts.append(f"({levels} floors)")
+        
+        if "fee" in tags:
+            if tags["fee"] == "yes":
+                description_parts.append("(Entry fee required)")
+            else:
+                description_parts.append("(Free entry)")
+        
+        return " ".join(description_parts) if description_parts else "Point of interest"
+    
+    def _format_address(self, tags: Dict[str, str]) -> str:
+        """Format address from OSM tags"""
+        address_parts = []
+        
+        if "addr:housenumber" in tags and "addr:street" in tags:
+            address_parts.append(f"{tags['addr:housenumber']} {tags['addr:street']}")
+        elif "addr:street" in tags:
+            address_parts.append(tags["addr:street"])
+        
+        if "addr:city" in tags:
+            address_parts.append(tags["addr:city"])
+        
+        if "addr:country" in tags:
+            address_parts.append(tags["addr:country"])
+        
+        return ", ".join(address_parts) if address_parts else "Address not available"
+    
+    def _estimate_rating(self, tags: Dict[str, str]) -> float:
+        """Estimate rating based on available tags"""
+        # Base rating
+        rating = 3.5
+        
+        # Boost for popular tourist attractions
+        if tags.get("tourism") in ["attraction", "museum", "monument"]:
+            rating += 0.5
+        
+        # Boost for UNESCO sites
+        if "heritage" in tags or "unesco" in str(tags).lower():
+            rating += 1.0
+        
+        # Boost for places with websites
+        if "website" in tags:
+            rating += 0.3
+        
+        # Boost for places with Wikipedia entries
+        if "wikipedia" in tags:
+            rating += 0.4
+        
+        return min(5.0, rating)
+    
+    def _estimate_price_level(self, tags: Dict[str, str], poi_type: str) -> str:
+        """Estimate price level"""
+        if tags.get("fee") == "no":
+            return "Free"
+        elif poi_type in ["park", "garden", "viewpoint"]:
+            return "Free"
+        elif poi_type in ["museum", "attraction", "zoo", "aquarium"]:
+            return "$"
+        elif poi_type in ["restaurant", "bar", "cafe"]:
+            return "$$"
+        else:
+            return "$"
+    
+    def _check_accessibility(self, tags: Dict[str, str]) -> Dict[str, bool]:
+        """Check accessibility features"""
+        return {
+            "wheelchair": tags.get("wheelchair") == "yes",
+            "blind": tags.get("tactile_paving") == "yes",
+            "hearing_loop": tags.get("hearing_loop") == "yes"
+        }
+    
+    def _get_mock_poi_data(self, destination: str, categories: List[str]) -> Dict[str, Any]:
+        """Return mock POI data when API is unavailable"""
+        mock_pois = [
+            {
+                "name": f"Central Museum - {destination}",
+                "type": "museum",
+                "category": "culture",
+                "description": "Main city museum with local history and art",
+                "address": f"Museum Street 1, {destination}",
+                "coordinates": {"lat": 0.0, "lon": 0.0},
+                "rating": 4.2,
+                "price_level": "$",
+                "source": "mock"
+            },
+            {
+                "name": f"City Park - {destination}",
+                "type": "park",
+                "category": "recreation",
+                "description": "Large urban park perfect for walking and relaxation",
+                "address": f"Park Avenue, {destination}",
+                "coordinates": {"lat": 0.0, "lon": 0.0},
+                "rating": 4.0,
+                "price_level": "Free",
+                "source": "mock"
+            }
+        ]
+        
+        return {
+            "destination": destination,
+            "categories": categories,
+            "pois": mock_pois,
+            "total_found": len(mock_pois),
+            "search_timestamp": datetime.utcnow().isoformat(),
             "data_source": "mock"
         }

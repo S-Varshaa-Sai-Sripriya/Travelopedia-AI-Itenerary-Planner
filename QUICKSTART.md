@@ -7,13 +7,17 @@
 - Git
 - Redis (brew install redis)
 
-### API Keys (All Free Tiers)
+### API Keys (All Completely Free)
 1. **OpenWeatherMap**: 1000 calls/day free → https://openweathermap.org/api
 2. **Aviationstack**: 1000 requests/month free → https://aviationstack.com/
 3. **Fixer.io**: 100 requests/month free → https://fixer.io/
 
+### No API Keys Required (Open Source)
+- **OpenStreetMap**: Maps and geocoding (completely free)
+- **Nominatim**: Address search (completely free)
+- **Overpass API**: POI and attractions data (completely free)
+
 ### Optional
-- **OpenAI**: $5 free credit → https://platform.openai.com/
 - **Ollama**: Completely free local LLM → https://ollama.ai/
 
 ## ⚡ 5-Minute Setup

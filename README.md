@@ -93,21 +93,20 @@ AI-Itenary/
 
 ### ✅ Completely Free APIs:
 1. **Weather**: OpenWeatherMap (1000 calls/day free)
-2. **Hotels**: Booking.com (free tier available)
+2. **Hotels**: OpenStreetMap + Overpass API (completely free)
 3. **Flights**: Aviationstack (1000 requests/month free)
-4. **Maps/Places**: OpenStreetMap + Nominatim (free)
+4. **Maps/Places**: OpenStreetMap + Nominatim (completely free)
 5. **Currency**: Fixer.io (100 requests/month free)
 6. **LLM**: Ollama (local inference, completely free)
+7. **Geocoding**: Nominatim (completely free)
+8. **Points of Interest**: Overpass API (completely free)
 
-### ⚠️ Freemium APIs (with generous free tiers):
-1. **OpenAI**: $5 free credit for new accounts
-2. **Hugging Face**: Free tier for model inference
-3. **Redis Cloud**: 30MB free tier
-
-### 💰 Paid APIs with Free Alternatives:
-- **Google Maps API** → **OpenStreetMap + Nominatim** (free alternative)
-- **Amadeus Travel API** → **Aviationstack** (free alternative)
-- **AWS/Azure** → **Local development** (free alternative)
+### 🌟 Why These APIs?
+- **Zero Cost**: All APIs are completely free with no payment required
+- **No Credit Cards**: No need to provide payment information
+- **Generous Limits**: Sufficient for development and testing
+- **Open Source**: Many are backed by open-source communities
+- **No Vendor Lock-in**: Easy to switch or self-host alternatives
 
 ## API Keys Setup
 
@@ -119,22 +118,23 @@ DEBUG=True
 SECRET_KEY=your-secret-key-here
 DATABASE_URL=sqlite:///./travel_planner.db
 
-# AI/LLM Configuration
-OPENAI_API_KEY=your-openai-key  # Optional: $5 free credit
-HUGGINGFACE_API_KEY=your-hf-key  # Free tier available
-OLLAMA_BASE_URL=http://localhost:11434  # Local LLM (free)
+# AI/LLM Configuration (Completely Free)
+OLLAMA_BASE_URL=http://localhost:11434  # Local LLM (completely free)
 
-# Travel APIs (All Free Tiers)
+# Travel APIs (All Completely Free)
 OPENWEATHER_API_KEY=your-openweather-key  # 1000 calls/day free
 AVIATIONSTACK_API_KEY=your-aviationstack-key  # 1000 requests/month free
 FIXER_API_KEY=your-fixer-key  # 100 requests/month free
 
-# Infrastructure
+# Infrastructure (Local & Free)
 REDIS_URL=redis://localhost:6379  # Local Redis
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092  # Local Kafka
 
+# Open Source APIs (No Keys Required)
+# OpenStreetMap/Nominatim: No API key needed
+# Overpass API: No API key needed
+
 # Optional Integrations
-BOOKING_API_KEY=your-booking-key  # Free tier available
 CALENDAR_WEBHOOK_URL=your-webhook-url  # For calendar sync
 ```
 
@@ -182,34 +182,46 @@ flake8 .
 mypy .
 ```
 
-## Getting API Keys (Free)
+## Getting API Keys (All Free)
 
 ### 1. OpenWeatherMap (Weather Data)
 - Visit: https://openweathermap.org/api
 - Sign up for free account
 - Get API key (1000 calls/day free)
+- **Cost**: $0 forever
 
 ### 2. Aviationstack (Flight Data)
 - Visit: https://aviationstack.com/
-- Free plan: 1000 requests/month
-- Sign up and get API key
+- Sign up for free plan (1000 requests/month)
+- Get API key from dashboard
+- **Cost**: $0 forever
 
 ### 3. Fixer.io (Currency Exchange)
 - Visit: https://fixer.io/
-- Free plan: 100 requests/month
-- Sign up and get API key
+- Sign up for free plan (100 requests/month)
+- Get API key from dashboard
+- **Cost**: $0 forever
 
 ### 4. Ollama (Local LLM - Completely Free)
 ```bash
 # Install Ollama
 curl -fsSL https://ollama.ai/install.sh | sh
 
-# Pull a model
-ollama pull llama2
+# Pull a model (choose one)
+ollama pull llama2          # General purpose
+ollama pull codellama        # For code tasks
+ollama pull mistral          # Lightweight option
 
 # Start Ollama server
 ollama serve
 ```
+**Cost**: $0 forever (runs locally)
+
+### 5. OpenStreetMap APIs (No Registration Needed)
+- **Nominatim**: Geocoding and reverse geocoding
+- **Overpass API**: Points of interest and map data
+- **Cost**: $0 forever (community-maintained)
+- **Usage**: No API key required, just use the endpoints directly
 
 ## Team Collaboration Guidelines
 
