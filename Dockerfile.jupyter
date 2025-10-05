@@ -1,0 +1,29 @@
+FROM jupyter/scipy-notebook:latest
+
+USER root
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+USER jovyan
+
+# Copy requirements and install additional packages
+COPY requirements.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Install additional Jupyter extensions and data science packages
+RUN pip install --no-cache-dir \
+    jupyter-ai \
+    plotly \
+    seaborn \
+    networkx \
+    scikit-learn \
+    torch-geometric \
+    gradio
+
+# Create work directory
+RUN mkdir -p /home/jovyan/work
+
+WORKDIR /home/jovyan/work
