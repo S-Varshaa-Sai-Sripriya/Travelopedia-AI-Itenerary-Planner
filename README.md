@@ -1,4 +1,4 @@
-# AI Travel Planner - Project Setup
+# Travelopedia: AI-Powered Itinerary Planner
 
 This is the base setup for the AI Travel Planner project. This document will help team members set up their development environment and start contributing.
 
