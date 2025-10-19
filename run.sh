@@ -72,81 +72,11 @@ mkdir -p output/itineraries
 mkdir -p output/feedback
 mkdir -p logs
 
+echo ""
+echo "🌐 Starting Streamlit Web UI..."
 echo "═══════════════════════════════════════════════════════════════"
-echo "Choose what to run:"
-echo "═══════════════════════════════════════════════════════════════"
-echo "1. 🌐 Web UI (Streamlit) - Recommended"
-echo "2. 🖥️  Backend Test (CLI)"
-echo "3. 🧪 API Tests"
-echo "4. 🔍 Workflow Analysis"
-echo "5. 🆕 Test New Features"
-echo "6. 👋 Exit"
+echo "📍 Open your browser to: http://localhost:8501"
+echo "💡 Press Ctrl+C to stop the server"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
-read -p "Enter your choice (1-6): " choice
-
-case $choice in
-    1)
-        echo ""
-        echo "🌐 Starting Streamlit Web UI..."
-        echo "═══════════════════════════════════════════════════════════════"
-        echo "📍 Open your browser to: http://localhost:8501"
-        echo "💡 Press Ctrl+C to stop the server"
-        echo "═══════════════════════════════════════════════════════════════"
-        echo ""
-        streamlit run frontend/app.py --server.port 8501 --server.address localhost
-        ;;
-    2)
-        echo ""
-        echo "🖥️  Running backend test..."
-        echo "═══════════════════════════════════════════════════════════════"
-        echo ""
-        python3 backend/main.py
-        echo ""
-        echo "✅ Backend test complete!"
-        echo "📁 Check output/itineraries/ for generated files"
-        ;;
-    3)
-        echo ""
-        echo "🧪 Running API tests..."
-        echo "═══════════════════════════════════════════════════════════════"
-        echo ""
-        python3 tests/test_apis.py
-        echo ""
-        echo "✅ API tests complete!"
-        ;;
-    4)
-        echo ""
-        echo "🔍 Running workflow analysis..."
-        echo "═══════════════════════════════════════════════════════════════"
-        echo ""
-        python3 tests/test_workflow.py
-        echo ""
-        echo "✅ Workflow analysis complete!"
-        ;;
-    5)
-        echo ""
-        echo "🆕 Testing new features..."
-        echo "═══════════════════════════════════════════════════════════════"
-        echo ""
-        python3 tests/test_new_features.py
-        echo ""
-        echo "✅ Feature tests complete!"
-        ;;
-    6)
-        echo ""
-        echo "👋 Goodbye! Happy travel planning!"
-        echo ""
-        exit 0
-        ;;
-    *)
-        echo ""
-        echo "❌ Invalid choice. Please run again and select 1-6."
-        exit 1
-        ;;
-esac
-
-# Deactivate venv on exit (if we activated it)
-if [ -n "$VIRTUAL_ENV" ]; then
-    deactivate
-fi
+streamlit run frontend/app.py --server.port 8501 --server.address localhost
