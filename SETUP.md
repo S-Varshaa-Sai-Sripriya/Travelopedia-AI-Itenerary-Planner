@@ -1,259 +1,373 @@
-# AI Travel Planner - Setup Instructions
+# 🚀 Travelopedia Setup Guide
 
-## Quick Setup for Team Members
-
-### 1. Prerequisites Installation
-
-**Install Python 3.9+ and Git:**
-```bash
-# macOS (using Homebrew)
-brew install python@3.11 git
-
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3.11 python3.11-venv git
-
-# Windows (use official installers)
-# Download from python.org and git-scm.com
-```
-
-**Install Redis (for caching):**
-```bash
-# macOS
-brew install redis
-brew services start redis
-
-# Ubuntu/Debian
-sudo apt install redis-server
-sudo systemctl start redis
-
-# Windows
-# Download from redis.io/download
-```
-
-### 2. Project Setup
-
-**Clone and setup:**
-```bash
-# Clone the repository
-git clone https://github.com/12-crypto/AI-Itenary.git
-cd AI-Itenary
-
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-# macOS/Linux:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment template
-cp .env.example .env
-```
-
-### 3. Get Free API Keys
-
-**OpenWeatherMap (Weather Data):**
-1. Visit: https://openweathermap.org/api
-2. Sign up for free account
-3. Get API key (1000 calls/day free)
-4. Add to `.env`: `OPENWEATHER_API_KEY=your_key_here`
-
-**Aviationstack (Flight Data):**
-1. Visit: https://aviationstack.com/
-2. Sign up for free plan (1000 requests/month)
-3. Get API key
-4. Add to `.env`: `AVIATIONSTACK_API_KEY=your_key_here`
-
-**Fixer.io (Currency Exchange):**
-1. Visit: https://fixer.io/
-2. Sign up for free plan (100 requests/month)
-3. Get API key
-4. Add to `.env`: `FIXER_API_KEY=your_key_here`
-
-**Ollama (Free Local LLM):**
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull a model (this may take a few minutes)
-ollama pull llama2
-
-# Start Ollama server (keep this running)
-ollama serve
-```
-
-### 4. Initialize Database
-
-```bash
-# Initialize database and create sample data
-python scripts/init_db.py
-```
-
-### 5. Start Development Server
-
-```bash
-# Start the FastAPI server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 6. Verify Setup
-
-Visit http://localhost:8000 in your browser. You should see:
-```json
-{
-  "message": "AI Travel Planner API",
-  "version": "1.0.0",
-  "docs": "/api/docs",
-  "status": "healthy"
-}
-```
-
-**Check API documentation:**
-- Swagger UI: http://localhost:8000/api/docs
-- ReDoc: http://localhost:8000/api/redoc
-
-### 7. Run Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app tests/
-
-# Run specific test file
-pytest tests/test_health.py -v
-```
-
-## Docker Setup (Alternative)
-
-If you prefer Docker:
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f app
-
-# Stop services
-docker-compose down
-```
-
-## Development Workflow
-
-### Daily Development
-```bash
-# Activate virtual environment
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-
-# Start Redis (if not running)
-redis-server  # or brew services start redis
-
-# Start Ollama (if using local LLM)
-ollama serve
-
-# Start development server
-uvicorn app.main:app --reload
-```
-
-### Working with Git
-```bash
-# Create feature branch
-git checkout -b feature/your-feature-name
-
-# Make changes and test
-python -m pytest tests/
-
-# Format code
-black .
-flake8 .
-
-# Commit changes
-git add .
-git commit -m "feat: description of your changes"
-
-# Push to remote
-git push origin feature/your-feature-name
-
-# Create pull request on GitHub
-```
-
-### Code Quality Checks
-```bash
-# Format code
-black .
-
-# Check style
-flake8 .
-
-# Type checking
-mypy .
-
-# Run all quality checks
-black . && flake8 . && mypy . && pytest
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**1. Import errors when running the app:**
-- Make sure virtual environment is activated
-- Ensure all dependencies are installed: `pip install -r requirements.txt`
-
-**2. Database errors:**
-- Run database initialization: `python scripts/init_db.py`
-- Check if SQLite file permissions are correct
-
-**3. Redis connection errors:**
-- Make sure Redis is running: `redis-cli ping` should return `PONG`
-- Check Redis URL in `.env` file
-
-**4. API key issues:**
-- Verify API keys are correctly set in `.env` file
-- Check API usage limits (some free tiers have daily limits)
-
-**5. Ollama not working:**
-- Make sure Ollama is installed: `ollama --version`
-- Check if model is downloaded: `ollama list`
-- Verify Ollama server is running: `curl http://localhost:11434`
-
-### Getting Help
-
-1. **Check logs:** The application uses structured logging
-2. **GitHub Issues:** Create an issue for bugs or questions
-3. **Team Chat:** Use your team's Slack/Discord channel
-4. **Documentation:** Check `/docs` folder for detailed guides
-
-### Performance Tips
-
-1. **Use Docker for consistency** across team members
-2. **Enable Redis caching** for better API performance
-3. **Use pytest-xdist** for parallel test execution: `pip install pytest-xdist` then `pytest -n auto`
-4. **Monitor API usage** to stay within free tier limits
-
-## Next Steps
-
-1. **For New Contributors:**
-   - Complete this setup
-   - Read the main README.md
-   - Pick an issue from GitHub Issues
-   - Join team communication channels
-
-2. **For Project Leads:**
-   - Set up CI/CD pipeline
-   - Configure monitoring and logging
-   - Create team communication channels
-   - Assign issues to team members
+A quick guide to get Travelopedia up and running on your machine.
 
 ---
 
-**Need help?** Create an issue on GitHub or reach out to the team!
+## 📋 Prerequisites
 
-Happy coding! 🚀✈️🏨
+- Python 3.8 or higher
+- pip (Python package manager)
+- Internet connection (for API calls)
+
+---
+
+## ⚡ Quick Start (5 Minutes)
+
+### 1. Clone/Download the Project
+```bash
+cd /path/to/Travelopedia
+```
+
+### 2. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Set Up Environment Variables
+Create a `.env` file in the root directory:
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+# Weather API (FREE - Required)
+OPENWEATHER_API_KEY=your_openweather_key_here
+
+# Activities APIs (Optional but recommended)
+YELP_API_KEY=your_yelp_key_here
+
+# Flight & Hotel APIs (Optional - will use mock data if not provided)
+AVIATIONSTACK_API_KEY=your_aviationstack_key_here
+RAPIDAPI_KEY=your_rapidapi_key_here
+EOF
+```
+
+**Get Free API Keys:**
+- OpenWeatherMap: https://openweathermap.org/api (FREE, 1,000 calls/day)
+- Yelp Fusion: https://www.yelp.com/developers (FREE, 5,000 calls/day)
+- Aviationstack: https://aviationstack.com (FREE, 100 calls/month)
+- RapidAPI: https://rapidapi.com (FREE tier available)
+
+**Note:** System works with mock data if APIs aren't configured!
+
+### 4. Run the Application
+
+**Option A: Web UI (Recommended)**
+```bash
+streamlit run frontend/app.py
+```
+Then open your browser to: http://localhost:8501
+
+**Option B: Command Line Test**
+```bash
+python backend/main.py
+```
+
+---
+
+## 🧪 Verify Installation
+
+### Test APIs
+```bash
+python tests/test_apis.py
+```
+
+Expected output:
+```
+✅ Weather API Working! (OpenWeatherMap)
+✅ Activities API Working! (OpenStreetMap - FREE!)
+⚠️  Flights: Using Mock Data
+⚠️  Hotels: Using Mock Data
+```
+
+### Test Workflow
+```bash
+python tests/test_workflow.py
+```
+
+### Test New Features
+```bash
+python tests/test_new_features.py
+```
+
+---
+
+## 📁 Project Structure
+
+```
+Travelopedia/
+├── backend/              # Core AI agents and logic
+│   ├── main.py          # Main orchestration pipeline
+│   ├── orchestrator.py  # Llama-based orchestrator
+│   ├── personalization_gnn.py  # GNN personalization
+│   ├── budget_optimizer.py     # Budget optimization
+│   ├── itinerary_agent.py      # Itinerary generation
+│   ├── api_manager.py          # API integrations
+│   └── utils/           # Validators, config, logging
+├── frontend/            # Streamlit UI
+│   ├── app.py          # Main UI application
+│   └── components/     # UI components
+├── tests/              # Test suites
+├── output/             # Generated itineraries & PDFs
+├── logs/               # Application logs
+└── requirements.txt    # Python dependencies
+```
+
+---
+
+## 🎯 Usage Examples
+
+### Using the Web UI
+
+1. **Launch the app:**
+   ```bash
+   streamlit run frontend/app.py
+   ```
+
+2. **Fill in the form:**
+   - Destination: Paris
+   - Origin: New York
+   - Dates: Pick your travel dates
+   - Budget: $2500
+   - Group Size: 2
+   - Preferences: Cultural, Culinary
+
+3. **Click "Plan My Trip"**
+
+4. **Download your itinerary** (PDF + Calendar)
+
+### Using the Command Line
+
+```bash
+# Run with sample data
+python backend/main.py
+
+# Check output folder
+ls -la output/itineraries/
+```
+
+---
+
+## 🔧 Configuration
+
+### Edit API Settings
+Edit `backend/utils/config.yaml`:
+
+```yaml
+apis:
+  weather:
+    enabled: true
+    provider: openweathermap
+  
+  activities:
+    enabled: true
+    provider: osm_nominatim  # Free, no key needed!
+  
+  flight:
+    enabled: false  # Set to true when API key added
+  
+  hotel:
+    enabled: false  # Set to true when API key added
+```
+
+### Edit Budget Defaults
+Edit `backend/utils/config.yaml`:
+
+```yaml
+budget:
+  default_allocation:
+    transport: 0.30      # 30% for flights
+    accommodation: 0.35  # 35% for hotels
+    activities: 0.20     # 20% for activities
+    food: 0.10          # 10% for food
+    miscellaneous: 0.05  # 5% for misc
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### "ModuleNotFoundError"
+```bash
+# Reinstall dependencies
+pip install -r requirements.txt
+```
+
+### "API key not found"
+```bash
+# Check .env file exists
+ls -la .env
+
+# Verify it's loaded
+python -c "from dotenv import load_dotenv; load_dotenv(); import os; print('Keys loaded:', bool(os.getenv('OPENWEATHER_API_KEY')))"
+```
+
+### "Permission denied" (macOS)
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+### Streamlit Port Already in Use
+```bash
+# Use different port
+streamlit run frontend/app.py --server.port 8502
+```
+
+### PDF Generation Errors
+```bash
+# Install reportlab
+pip install reportlab
+```
+
+---
+
+## 🌟 Features
+
+### ✅ Working Features
+- ✅ Real-time weather forecasts (OpenWeatherMap)
+- ✅ Activities recommendations (OpenStreetMap + Yelp)
+- ✅ GNN-based personalization
+- ✅ Budget optimization with alternatives
+- ✅ PDF itinerary generation
+- ✅ Calendar export (.ics)
+- ✅ Multi-comfort level planning
+- ✅ Progress tracking UI
+
+### 🔄 Using Mock Data (If APIs Not Configured)
+- Flights (intelligent price simulation)
+- Hotels (realistic pricing based on location)
+
+### 🚧 Future Enhancements
+- Kafka real-time updates
+- Automated booking integration
+- Email notifications
+- Multi-destination planning
+
+---
+
+## 🆘 Getting Help
+
+### Check Documentation
+- `README.md` - Project overview
+- `ARCHITECTURE_ANALYSIS.md` - Detailed system analysis
+- `API_SETUP_GUIDE.md` - API configuration guide
+- `QUICKSTART.md` - Quick reference
+
+### Run Tests
+```bash
+# Test everything
+python tests/test_apis.py
+python tests/test_workflow.py
+python tests/test_new_features.py
+```
+
+### Check Logs
+```bash
+# View recent logs
+tail -f logs/travel_planner.log
+```
+
+---
+
+## 💡 Tips
+
+1. **Start Simple**: Run without API keys first (uses mock data)
+2. **Add APIs Gradually**: Start with Weather (free & easy)
+3. **Test Often**: Run `test_apis.py` after adding each key
+4. **Check Logs**: Look in `logs/` folder for detailed debugging
+5. **Use Mock Data**: Perfect for development and demos
+
+---
+
+## 🚀 Quick Commands Cheat Sheet
+
+```bash
+# Install
+pip install -r requirements.txt
+
+# Run Web UI
+streamlit run frontend/app.py
+
+# Run CLI Test
+python backend/main.py
+
+# Test APIs
+python tests/test_apis.py
+
+# Test Workflow
+python tests/test_workflow.py
+
+# View Logs
+tail -f logs/travel_planner.log
+
+# Clean Output
+rm -rf output/itineraries/*
+```
+
+---
+
+## 📊 System Requirements
+
+**Minimum:**
+- Python 3.8+
+- 2GB RAM
+- 500MB disk space
+- Internet connection
+
+**Recommended:**
+- Python 3.10+
+- 4GB RAM
+- 1GB disk space
+- Stable internet connection
+
+---
+
+## 🎓 Example API Keys Setup
+
+```bash
+# 1. Get OpenWeatherMap key (5 minutes)
+# Visit: https://openweathermap.org/api
+# Sign up → Get API key → Copy
+
+# 2. Add to .env
+echo "OPENWEATHER_API_KEY=abc123def456" >> .env
+
+# 3. Test it
+python tests/test_apis.py
+
+# 4. See real weather data! ☀️
+```
+
+---
+
+## ✅ Success Checklist
+
+- [ ] Python 3.8+ installed
+- [ ] Dependencies installed (`pip install -r requirements.txt`)
+- [ ] `.env` file created (at minimum with OPENWEATHER_API_KEY)
+- [ ] Tests pass (`python tests/test_apis.py`)
+- [ ] Web UI launches (`streamlit run frontend/app.py`)
+- [ ] Can generate itinerary
+- [ ] Can download PDF
+
+---
+
+## 🎉 You're Ready!
+
+If you see this, you're all set:
+```
+✅ Weather API Working!
+✅ Activities API Working!
+⚠️  Using mock data for flights/hotels (optional)
+
+Visit: http://localhost:8501
+```
+
+**Happy Travel Planning! ✈️🌍**
+
+---
+
+**Last Updated:** October 19, 2025  
+**Version:** 1.0  
+**Status:** Production Ready (Beta)
