@@ -181,6 +181,4 @@ This is a demonstration project showcasing AI orchestration and real-time travel
 
 MIT License
 
----
 
-**Built with ❤️ using AI orchestration and modern web technologies**
