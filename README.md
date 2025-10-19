@@ -1,8 +1,10 @@
 # 🌍 AI Travel Planner
 
 An intelligent, adaptive travel planning system powered by multi-agent AI orchestration, real-time data integration, and personalized recommendations.
-<img width="3420" height="1964" alt="image" src="https://github.com/user-attachments/assets/8973376c-d45c-4939-b721-88aca303ac5c" />
-<img width="3420" height="1574" alt="image" src="https://github.com/user-attachments/assets/bcc76c03-e3ea-472d-8702-31fb13bb733b" />
+<img width="3420" height="2018" alt="image" src="https://github.com/user-attachments/assets/50840af0-3a99-4fbb-81ec-4774c8f4a1df" />
+
+<img width="3420" height="2010" alt="image" src="https://github.com/user-attachments/assets/4b553c21-f83c-405e-9c9d-831627024000" />
+
 
 
 ## 🧠 Overview
