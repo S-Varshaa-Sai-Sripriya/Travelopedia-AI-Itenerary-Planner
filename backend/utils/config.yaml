@@ -19,16 +19,16 @@ apis:
   # Flight APIs
   flight:
     enabled: true  # Real API enabled
-    provider: "aviationstack"
+    provider: "serpapi"
     timeout: 30
-    mock_fallback: true
+    mock_fallback: false
   
   # Hotel APIs
   hotel:
     enabled: true  # Real API enabled
-    provider: "booking_rapidapi"
+    provider: "serpapi"
     timeout: 30
-    mock_fallback: true
+    mock_fallback: false
   
   # Weather APIs
   weather:

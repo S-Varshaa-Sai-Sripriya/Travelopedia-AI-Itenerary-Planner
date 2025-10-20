@@ -56,12 +56,18 @@ Then choose option 1 for the Web UI.
 pip install -r requirements.txt
 ```
 
-**Step 2:** Set Up API Keys (Optional - system works with mock data!)
+**Step 2:** Set Up API Keys (REQUIRED for flight and hotel data)
 
 Create a `.env` file:
 ```bash
+# REQUIRED for flights and hotels
+SERPAPI_API_KEY=your_key_here  # Get from serpapi.com (100 searches/month free)
+
+# Optional for weather
 OPENWEATHER_API_KEY=your_key_here  # Free from openweathermap.org
-        # Free from yelp.com/developers
+
+# Optional for activities
+YELP_API_KEY=your_key_here  # Free from yelp.com/developers
 ```
 
 **Step 3:** Run the Application
@@ -84,7 +90,10 @@ python backend/main.py
 ### 🧪 Verify Installation
 
 ```bash
-# Test APIs
+# Test SERP API integration (flights + hotels)
+python test_serpapi.py
+
+# Test other APIs
 python tests/test_apis.py
 
 # Test workflow
@@ -109,12 +118,13 @@ python tests/test_new_features.py
 - Animated loading states
 
 ### Results Dashboard
-- ✈️ Flight recommendations with pricing
-- 🏨 Hotel options with ratings
-- 🌤️ Weather forecasts
-- 🗺️ Interactive map integration
-- 📥 PDF itinerary download
-- 🗓️ Calendar export (.ics)
+- ✈️ **Flight recommendations** with airline logos, real-time pricing, and carbon emissions
+- 🏨 **Hotel options** with images, ratings, reviews, and amenities
+- 🌤️ **Weather forecasts** for each day
+- 🗺️ **Interactive map** integration
+- 💰 **Budget breakdown** with detailed cost allocation
+- 📥 **PDF itinerary** download
+- 🗓️ **Calendar export** (.ics)
 
 ### Feedback System
 - User satisfaction ratings
@@ -136,10 +146,10 @@ python tests/test_new_features.py
 - Coordinates agent workflow
 
 ### API Manager (`api_manager.py`)
-- Fetches real-time flight data
-- Retrieves hotel information
-- Gets weather forecasts
-- Includes mock data fallback
+- **SERP API Google Flights** - Real-time flight data with airline logos
+- **SERP API Google Hotels** - Hotel data with images and ratings
+- **OpenWeatherMap** - Weather forecasts
+- **Budget-based filtering** - Filters results by budget constraints
 
 ### Personalization GNN (`personalization_gnn.py`)
 - Graph Neural Network for user preferences

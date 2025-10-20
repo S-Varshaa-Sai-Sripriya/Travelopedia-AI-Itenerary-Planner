@@ -73,14 +73,14 @@ def main():
             # Destination
             destination = st.text_input(
                 "Destination",
-                value="Bali, Indonesia",
-                help="Where do you want to go?"
+                value="Los Angeles, USA",
+                help="Where do you want to go? You can use city names (e.g., 'New York, USA') or airport codes (e.g., 'JFK')"
             )
             
             origin = st.text_input(
                 "Origin",
                 value="New York, USA",
-                help="Where are you traveling from?"
+                help="Where are you traveling from? You can use city names or airport codes (e.g., 'JFK', 'LAX', 'DEL')"
             )
             
             # Dates
@@ -112,10 +112,16 @@ def main():
                 "Total Budget (USD)",
                 min_value=500,
                 max_value=20000,
-                value=2500,
+                value=3500,
                 step=100,
-                help="Your total budget for the trip"
+                help="Your total budget for the trip. For international flights, consider $3000+"
             )
+            
+            # Show budget recommendation
+            if budget < 2000:
+                st.info("💡 Tip: International flights typically start at $1500-2000. Consider increasing budget for more options.")
+            elif budget < 3000:
+                st.info("💡 Tip: For comfort or luxury travel, consider budgets of $3000+")
             
             # Group size
             group_size = st.number_input(

@@ -30,8 +30,7 @@ class APIManager:
         
         # Load API keys from environment
         self.openweather_key = os.getenv('OPENWEATHER_API_KEY')
-        self.aviationstack_key = os.getenv('AVIATIONSTACK_API_KEY')
-        self.rapidapi_key = os.getenv('RAPIDAPI_KEY')
+        self.serpapi_key = os.getenv('SERPAPI_API_KEY')
         self.foursquare_key = os.getenv('FOURSQUARE_API_KEY')
         self.yelp_key = os.getenv('YELP_API_KEY')
         
@@ -43,30 +42,34 @@ class APIManager:
         destination: str,
         start_date: str,
         end_date: str,
-        passengers: int = 1
+        passengers: int = 1,
+        budget: Optional[float] = None,
+        comfort_level: str = "standard"
     ) -> List[Dict[str, Any]]:
         """
-        Fetch flight options.
+        Fetch flight options using SERP API Google Flights.
+        Fetches SEPARATE outbound and return flights.
         
         Args:
             origin: Origin city/airport
             destination: Destination city/airport
-            start_date: Departure date (YYYY-MM-DD)
-            end_date: Return date (YYYY-MM-DD)
+            start_date: Outbound departure date (YYYY-MM-DD)
+            end_date: Return departure date (YYYY-MM-DD)
             passengers: Number of passengers
+            budget: Optional budget filter
+            comfort_level: Comfort level (budget/standard/comfort/luxury)
             
         Returns:
-            List of flight options
+            List of flight combinations with airline logos for both legs
         """
-        logger.info(f"Fetching flights: {origin} → {destination}")
+        logger.info(f"Fetching flights via SERP API: {origin} → {destination} (outbound: {start_date}, return: {end_date})")
         
-        if self.api_config['flight']['enabled']:
-            # Real API integration would go here
-            logger.debug("Using real flight API")
-            return await self._fetch_real_flights(origin, destination, start_date, end_date, passengers)
+        if self.api_config['flight']['enabled'] and self.serpapi_key:
+            logger.debug("Using SERP API Google Flights")
+            return await self._fetch_serpapi_flights(origin, destination, start_date, end_date, passengers, budget, comfort_level)
         else:
-            logger.debug("Using mock flight data")
-            return self._generate_mock_flights(origin, destination, start_date, end_date, passengers)
+            logger.error("SERP API key not configured - cannot fetch flights")
+            return []
     
     async def fetch_hotels(
         self,
@@ -74,10 +77,11 @@ class APIManager:
         check_in: str,
         check_out: str,
         guests: int = 1,
-        min_rating: float = 3.0
+        min_rating: float = 3.0,
+        budget: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
-        Fetch hotel options.
+        Fetch hotel options using SERP API Google Hotels.
         
         Args:
             destination: Destination city
@@ -85,18 +89,19 @@ class APIManager:
             check_out: Check-out date (YYYY-MM-DD)
             guests: Number of guests
             min_rating: Minimum hotel rating
+            budget: Optional budget filter
             
         Returns:
-            List of hotel options
+            List of hotel options with images and details
         """
-        logger.info(f"Fetching hotels in {destination}")
+        logger.info(f"Fetching hotels via SERP API in {destination}")
         
-        if self.api_config['hotel']['enabled']:
-            logger.debug("Using real hotel API")
-            return await self._fetch_real_hotels(destination, check_in, check_out, guests, min_rating)
+        if self.api_config['hotel']['enabled'] and self.serpapi_key:
+            logger.debug("Using SERP API Google Hotels")
+            return await self._fetch_serpapi_hotels(destination, check_in, check_out, guests, min_rating, budget)
         else:
-            logger.debug("Using mock hotel data")
-            return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
+            logger.error("SERP API key not configured - cannot fetch hotels")
+            return []
     
     async def fetch_weather(
         self,
@@ -122,135 +127,434 @@ class APIManager:
             logger.debug("Using mock weather data")
             return self._generate_mock_weather(destination, date)
     
-    def _generate_mock_flights(
+    async def _fetch_serpapi_flights(
         self,
         origin: str,
         destination: str,
         start_date: str,
         end_date: str,
-        passengers: int
+        passengers: int,
+        budget: Optional[float] = None,
+        comfort_level: str = "standard"
     ) -> List[Dict[str, Any]]:
-        """Generate mock flight data."""
-        airlines = ["United", "Delta", "American Airlines", "Emirates", "Singapore Airlines", "Lufthansa"]
-        aircraft = ["Boeing 737", "Airbus A320", "Boeing 787", "Airbus A350"]
+        """
+        Fetch real flight data from SERP API Google Flights.
+        Fetches OUTBOUND flights (origin → destination on start_date)
+        and RETURN flights (destination → origin on end_date) SEPARATELY.
+        """
+        if not self.serpapi_key:
+            logger.error("SERP API key not found")
+            return []
         
-        base_price = random.randint(300, 1500)
+        # Map comfort level to travel class
+        travel_class_map = {
+            'budget': 2,  # Economy
+            'standard': 2,  # Economy
+            'comfort': 3,  # Premium Economy
+            'luxury': 1  # Business/First
+        }
+        travel_class = travel_class_map.get(comfort_level.lower(), 2)
         
+        try:
+            async with aiohttp.ClientSession() as session:
+                # SERP API Google Flights endpoint
+                url = "https://serpapi.com/search.json"
+                
+                # Fetch outbound AND return flights with round-trip parameter
+                params = {
+                    'engine': 'google_flights',
+                    'api_key': self.serpapi_key,
+                    'departure_id': origin,
+                    'arrival_id': destination,
+                    'outbound_date': start_date,
+                    'return_date': end_date,
+                    'currency': 'USD',
+                    'hl': 'en',
+                    'adults': passengers,
+                    'travel_class': travel_class,  # Use comfort level
+                    'type': '1'  # Round trip
+                }
+                
+                logger.info(f"Calling SERP API Google Flights: {origin} -> {destination} (outbound: {start_date}, return: {end_date}, class: {comfort_level})")
+                
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        # Debug: Log the response structure
+                        logger.debug(f"SERP API Response keys: {list(data.keys())}")
+                        if 'best_flights' in data:
+                            logger.debug(f"Found {len(data.get('best_flights', []))} best flights")
+                        if 'other_flights' in data:
+                            logger.debug(f"Found {len(data.get('other_flights', []))} other flights")
+                        if 'error' in data:
+                            logger.error(f"SERP API returned error: {data.get('error')}")
+                        
+                        flights = self._parse_serpapi_flights(data, passengers, budget, start_date, end_date, origin, destination)
+                        
+                        if flights:
+                            logger.info(f"✅ Fetched {len(flights)} round-trip flights from SERP API Google Flights")
+                            return flights
+                        else:
+                            logger.warning(f"No flights found in SERP API response for {origin} -> {destination}")
+                            logger.debug(f"SERP API full response: {str(data)[:500]}")
+                            return []
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"SERP API error {response.status}: {error_text[:200]}")
+                        return []
+        
+        except Exception as e:
+            logger.error(f"Error fetching flights from SERP API: {e}", exc_info=True)
+            return []
+    
+    def _parse_serpapi_flights(
+        self,
+        data: Dict,
+        passengers: int,
+        budget: Optional[float] = None,
+        start_date: str = None,
+        end_date: str = None,
+        origin: str = None,
+        destination: str = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Parse SERP API Google Flights response.
+        Extracts SEPARATE outbound and return flight details with logos.
+        """
         flights = []
-        for i in range(3):
-            price_multiplier = 1 + (i * 0.2)
-            flights.append({
-                "flight_id": f"FL{random.randint(1000, 9999)}",
-                "airline": random.choice(airlines),
-                "aircraft": random.choice(aircraft),
-                "outbound": {
-                    "departure": {
-                        "airport": origin,
-                        "time": f"{start_date}T08:00:00Z",
-                        "terminal": f"T{random.randint(1, 4)}"
+        
+        # Get best flights or other flights
+        best_flights = data.get('best_flights', [])
+        other_flights = data.get('other_flights', [])
+        all_flights = best_flights + other_flights
+        
+        if not all_flights:
+            logger.warning("No flights found in SERP API data")
+            return []
+        
+        for flight_data in all_flights[:10]:  # Limit to 10 flights
+            try:
+                # Get price
+                price = float(flight_data.get('price', 0))
+                
+                # Apply budget filter if provided
+                if budget and price > budget:
+                    continue
+                
+                # Get flight segments (legs)
+                flights_list = flight_data.get('flights', [])
+                if len(flights_list) < 2:
+                    continue  # Need both outbound and return
+                
+                # OUTBOUND: First segment(s) - from origin to destination
+                # Find where outbound ends (when we reach destination)
+                outbound_flights = []
+                return_flights = []
+                
+                collecting_outbound = True
+                for flight_segment in flights_list:
+                    arrival_id = flight_segment.get('arrival_airport', {}).get('id', '')
+                    departure_id = flight_segment.get('departure_airport', {}).get('id', '')
+                    
+                    if collecting_outbound:
+                        outbound_flights.append(flight_segment)
+                        # Check if we've reached destination
+                        if destination and destination.upper() in arrival_id.upper():
+                            collecting_outbound = False
+                    else:
+                        return_flights.append(flight_segment)
+                
+                # If we couldn't separate, use simple split
+                if not return_flights and len(outbound_flights) == len(flights_list):
+                    mid = len(flights_list) // 2
+                    outbound_flights = flights_list[:mid] if mid > 0 else flights_list[:1]
+                    return_flights = flights_list[mid:] if mid > 0 else flights_list[1:]
+                
+                # Get primary outbound flight details
+                outbound_main = outbound_flights[0] if outbound_flights else {}
+                outbound_last = outbound_flights[-1] if outbound_flights else outbound_main
+                
+                # Get primary return flight details
+                return_main = return_flights[0] if return_flights else {}
+                return_last = return_flights[-1] if return_flights else return_main
+                
+                # Outbound airline info
+                outbound_airline = outbound_main.get('airline', 'Unknown')
+                outbound_airline_logo = outbound_main.get('airline_logo', '')
+                outbound_flight_number = outbound_main.get('flight_number', 'N/A')
+                
+                # Return airline info (may be different!)
+                return_airline = return_main.get('airline', 'Unknown')
+                return_airline_logo = return_main.get('airline_logo', '')
+                return_flight_number = return_main.get('flight_number', 'N/A')
+                
+                # Calculate total duration for each leg
+                outbound_duration = sum(f.get('duration', 0) for f in outbound_flights)
+                return_duration = sum(f.get('duration', 0) for f in return_flights)
+                
+                # Get layovers for outbound
+                outbound_layovers = []
+                if len(outbound_flights) > 1:
+                    for f in outbound_flights[:-1]:
+                        layover_airport = f.get('arrival_airport', {}).get('name', 'Unknown')
+                        if layover_airport != 'Unknown':
+                            outbound_layovers.append(layover_airport)
+                
+                # Get layovers for return
+                return_layovers = []
+                if len(return_flights) > 1:
+                    for f in return_flights[:-1]:
+                        layover_airport = f.get('arrival_airport', {}).get('name', 'Unknown')
+                        if layover_airport != 'Unknown':
+                            return_layovers.append(layover_airport)
+                
+                # Extract departure/arrival info
+                outbound_departure = outbound_main.get('departure_airport', {})
+                outbound_arrival = outbound_last.get('arrival_airport', {})
+                return_departure = return_main.get('departure_airport', {})
+                return_arrival = return_last.get('arrival_airport', {})
+                
+                flights.append({
+                    "flight_id": f"{outbound_flight_number}_{return_flight_number}",
+                    "airline": f"{outbound_airline} / {return_airline}" if outbound_airline != return_airline else outbound_airline,
+                    "airline_logo": outbound_airline_logo,  # Primary logo
+                    "travel_class": outbound_main.get('travel_class', 'Economy'),
+                    "total_price": price,
+                    "currency": "USD",
+                    "carbon_emissions": flight_data.get('carbon_emissions', {}).get('this_flight', 0) or 0,
+                    
+                    # OUTBOUND LEG (on start_date)
+                    "outbound": {
+                        "date": start_date,
+                        "flight_number": outbound_flight_number,
+                        "airline": outbound_airline,
+                        "airline_logo": outbound_airline_logo,  # Outbound airline logo
+                        "aircraft": outbound_main.get('airplane', 'N/A'),
+                        "departure": {
+                            "airport": outbound_departure.get('id', origin or 'N/A'),
+                            "name": outbound_departure.get('name', 'N/A'),
+                            "time": outbound_departure.get('time', 'N/A'),
+                            "terminal": 'N/A'
+                        },
+                        "arrival": {
+                            "airport": outbound_arrival.get('id', destination or 'N/A'),
+                            "name": outbound_arrival.get('name', 'N/A'),
+                            "time": outbound_arrival.get('time', 'N/A'),
+                            "terminal": 'N/A'
+                        },
+                        "duration": outbound_duration,
+                        "duration_hours": outbound_duration // 60 if outbound_duration else 0,
+                        "stops": len(outbound_flights) - 1,
+                        "layovers": outbound_layovers
                     },
-                    "arrival": {
-                        "airport": destination,
-                        "time": f"{start_date}T16:00:00Z",
-                        "terminal": f"T{random.randint(1, 4)}"
+                    
+                    # RETURN LEG (on end_date)
+                    "return": {
+                        "date": end_date,
+                        "flight_number": return_flight_number,
+                        "airline": return_airline,
+                        "airline_logo": return_airline_logo,  # Return airline logo (may differ!)
+                        "aircraft": return_main.get('airplane', 'N/A'),
+                        "departure": {
+                            "airport": return_departure.get('id', destination or 'N/A'),
+                            "name": return_departure.get('name', 'N/A'),
+                            "time": return_departure.get('time', 'N/A'),
+                            "terminal": 'N/A'
+                        },
+                        "arrival": {
+                            "airport": return_arrival.get('id', origin or 'N/A'),
+                            "name": return_arrival.get('name', 'N/A'),
+                            "time": return_arrival.get('time', 'N/A'),
+                            "terminal": 'N/A'
+                        },
+                        "duration": return_duration,
+                        "duration_hours": return_duration // 60 if return_duration else 0,
+                        "stops": len(return_flights) - 1,
+                        "layovers": return_layovers
                     },
-                    "duration_hours": random.randint(6, 18),
-                    "stops": random.randint(0, 2)
-                },
-                "return": {
-                    "departure": {
-                        "airport": destination,
-                        "time": f"{end_date}T10:00:00Z",
-                        "terminal": f"T{random.randint(1, 4)}"
-                    },
-                    "arrival": {
-                        "airport": origin,
-                        "time": f"{end_date}T18:00:00Z",
-                        "terminal": f"T{random.randint(1, 4)}"
-                    },
-                    "duration_hours": random.randint(6, 18),
-                    "stops": random.randint(0, 2)
-                },
-                "price": round(base_price * price_multiplier * passengers, 2),
-                "currency": "USD",
-                "cabin_class": ["Economy", "Premium Economy", "Business"][i] if i < 3 else "Economy",
-                "baggage_allowance": f"{20 + (i * 10)}kg",
-                "amenities": ["WiFi", "Meals", "Entertainment", "Power Outlets"][: 2 + i],
-                "carbon_emissions": round(random.uniform(200, 800), 2),
-                "booking_url": f"https://example.com/book/{random.randint(10000, 99999)}"
-            })
+                    
+                    # Legacy fields for compatibility
+                    "price": price,
+                    "cabin_class": outbound_main.get('travel_class', 'Economy'),
+                    "baggage_allowance": "Check with airline",
+                    "amenities": [],
+                    "booking_url": f"https://www.google.com/travel/flights",
+                    "layover_duration": flight_data.get('layovers', [{}])[0].get('duration', 0) if flight_data.get('layovers') else 0
+                })
+            
+            except Exception as e:
+                logger.warning(f"Error parsing flight: {e}")
+                continue
+        
+        # Sort by price
+        flights.sort(key=lambda x: x['total_price'])
         
         return flights
     
-    def _generate_mock_hotels(
+    async def _fetch_serpapi_hotels(
         self,
         destination: str,
         check_in: str,
         check_out: str,
         guests: int,
-        min_rating: float
+        min_rating: float,
+        budget: Optional[float] = None
     ) -> List[Dict[str, Any]]:
-        """Generate mock hotel data."""
-        hotel_types = ["Resort", "Hotel", "Boutique Hotel", "Villa", "Hostel"]
-        hotel_names = [
-            "Paradise Resort", "Grand Palace Hotel", "Sunset Villa",
-            "Ocean View Resort", "Mountain Lodge", "Urban Boutique",
-            "Coastal Retreat", "City Center Hotel", "Luxury Suites"
-        ]
+        """
+        Fetch real hotel data from SERP API Google Hotels.
+        Returns hotels with images, ratings, and pricing.
+        """
+        if not self.serpapi_key:
+            logger.error("SERP API key not found")
+            return []
         
-        amenities_pool = [
-            "Free WiFi", "Swimming Pool", "Spa", "Gym", "Restaurant",
-            "Bar", "Room Service", "Airport Shuttle", "Parking",
-            "Beach Access", "Business Center", "Concierge"
-        ]
+        try:
+            async with aiohttp.ClientSession() as session:
+                # SERP API Google Hotels endpoint
+                url = "https://serpapi.com/search.json"
+                
+                params = {
+                    'engine': 'google_hotels',
+                    'api_key': self.serpapi_key,
+                    'q': destination,
+                    'check_in_date': check_in,
+                    'check_out_date': check_out,
+                    'adults': guests,
+                    'currency': 'USD',
+                    'gl': 'us',
+                    'hl': 'en'
+                }
+                
+                logger.info(f"Calling SERP API Google Hotels for {destination}")
+                
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        hotels = self._parse_serpapi_hotels(data, check_in, check_out, min_rating, budget)
+                        
+                        if hotels:
+                            logger.info(f"✅ Fetched {len(hotels)} hotels from SERP API Google Hotels")
+                            return hotels
+                        else:
+                            logger.warning("No hotels found in SERP API response")
+                            return []
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"SERP API error {response.status}: {error_text[:200]}")
+                        return []
         
+        except Exception as e:
+            logger.error(f"Error fetching hotels from SERP API: {e}", exc_info=True)
+            return []
+    
+    def _parse_serpapi_hotels(
+        self,
+        data: Dict,
+        check_in: str,
+        check_out: str,
+        min_rating: float,
+        budget: Optional[float] = None
+    ) -> List[Dict[str, Any]]:
+        """Parse SERP API Google Hotels response."""
+        hotels = []
+        destination = data.get('search_parameters', {}).get('q', 'Unknown')
+        
+        properties = data.get('properties', [])
+        
+        if not properties:
+            logger.warning("No hotels found in SERP API data")
+            return []
+        
+        # Calculate nights
         check_in_dt = datetime.strptime(check_in, "%Y-%m-%d")
         check_out_dt = datetime.strptime(check_out, "%Y-%m-%d")
         nights = (check_out_dt - check_in_dt).days
         
-        hotels = []
-        for i in range(5):
-            rating = round(random.uniform(max(min_rating, 3.5), 5.0), 1)
-            price_per_night = random.randint(80, 500) * (rating / 3.5)
+        for hotel_data in properties[:15]:  # Limit to 15 hotels
+            try:
+                # Get rating (out of 5)
+                rating = float(hotel_data.get('overall_rating', 0))
+                
+                # Apply rating filter
+                if rating < min_rating:
+                    continue
+                
+                # Get price
+                rate_per_night = hotel_data.get('rate_per_night', {})
+                price_value = rate_per_night.get('lowest', 0)
+                
+                # Handle price extraction
+                if isinstance(price_value, str):
+                    # Remove currency symbols and convert
+                    price_value = float(price_value.replace('$', '').replace(',', ''))
+                else:
+                    price_value = float(price_value) if price_value else 0
+                
+                total_price = price_value * nights
+                
+                # Apply budget filter if provided
+                if budget and total_price > budget:
+                    continue
+                
+                # Get images
+                images = []
+                if hotel_data.get('images'):
+                    for img in hotel_data['images'][:5]:
+                        if isinstance(img, dict):
+                            images.append(img.get('thumbnail', ''))
+                        elif isinstance(img, str):
+                            images.append(img)
+                
+                # Get amenities
+                amenities = hotel_data.get('amenities', [])
+                if isinstance(amenities, str):
+                    amenities = [amenities]
+                
+                hotels.append({
+                    "hotel_id": hotel_data.get('property_token', f"HTL{random.randint(1000, 9999)}"),
+                    "name": hotel_data.get('name', 'Unknown Hotel'),
+                    "type": hotel_data.get('type', 'Hotel'),
+                    "rating": rating,
+                    "review_count": hotel_data.get('reviews', 0),
+                    "location": {
+                        "address": hotel_data.get('description', ''),
+                        "city": destination,
+                        "distance_to_center": 0,  # Not provided by SERP API
+                        "coordinates": {
+                            "lat": hotel_data.get('gps_coordinates', {}).get('latitude', 0),
+                            "lng": hotel_data.get('gps_coordinates', {}).get('longitude', 0)
+                        }
+                    },
+                    "price": {
+                        "per_night": round(price_value, 2),
+                        "total": round(total_price, 2),
+                        "currency": "USD",
+                        "includes_tax": True,
+                        "extracted_price": rate_per_night.get('extracted_lowest', 0)
+                    },
+                    "room_type": "Standard Room",
+                    "amenities": amenities[:10],  # Limit amenities
+                    "policies": {
+                        "check_in": "14:00",
+                        "check_out": "11:00",
+                        "cancellation": "Check hotel policy"
+                    },
+                    "images": images,
+                    "thumbnail": hotel_data.get('images', [{}])[0].get('thumbnail', '') if hotel_data.get('images') else '',
+                    "booking_url": hotel_data.get('link', 'https://www.google.com/travel/hotels'),
+                    "hotel_class": hotel_data.get('hotel_class', ''),
+                    "eco_certified": hotel_data.get('eco_certified', False)
+                })
             
-            hotels.append({
-                "hotel_id": f"HTL{random.randint(1000, 9999)}",
-                "name": random.choice(hotel_names),
-                "type": random.choice(hotel_types),
-                "rating": rating,
-                "review_count": random.randint(100, 5000),
-                "location": {
-                    "address": f"{random.randint(1, 999)} {destination} Street",
-                    "city": destination,
-                    "distance_to_center": round(random.uniform(0.5, 10), 1),
-                    "coordinates": {
-                        "lat": round(random.uniform(-90, 90), 6),
-                        "lng": round(random.uniform(-180, 180), 6)
-                    }
-                },
-                "price": {
-                    "per_night": round(price_per_night, 2),
-                    "total": round(price_per_night * nights, 2),
-                    "currency": "USD",
-                    "includes_tax": True
-                },
-                "room_type": ["Standard Room", "Deluxe Room", "Suite", "Executive Suite"][min(i, 3)],
-                "amenities": random.sample(amenities_pool, k=random.randint(4, 8)),
-                "policies": {
-                    "check_in": "14:00",
-                    "check_out": "11:00",
-                    "cancellation": "Free cancellation until 24h before check-in"
-                },
-                "images": [
-                    f"https://example.com/images/hotel{i}_{j}.jpg" for j in range(3)
-                ],
-                "booking_url": f"https://example.com/book/hotel/{random.randint(10000, 99999)}"
-            })
+            except Exception as e:
+                logger.warning(f"Error parsing hotel: {e}")
+                continue
         
-        # Sort by rating
-        hotels.sort(key=lambda x: x['rating'], reverse=True)
+        # Sort by rating then price
+        hotels.sort(key=lambda x: (-x['rating'], x['price']['total']))
+        
         return hotels
-    
     def _generate_mock_weather(self, destination: str, date: str) -> Dict[str, Any]:
         """Generate mock weather data."""
         conditions = ["Sunny", "Partly Cloudy", "Cloudy", "Rainy", "Stormy", "Clear"]
@@ -277,257 +581,7 @@ class APIManager:
             "sunset": "18:30 PM",
             "icon": "☀️" if random.choice([True, False]) else "⛅"
         }
-    
-    async def _fetch_real_flights(
-        self,
-        origin: str,
-        destination: str,
-        start_date: str,
-        end_date: str,
-        passengers: int
-    ):
-        """Fetch real flight data from Aviationstack API."""
-        if not self.aviationstack_key:
-            logger.warning("Aviationstack API key not found, using mock data")
-            return self._generate_mock_flights(origin, destination, start_date, end_date, passengers)
-        
-        try:
-            # Aviationstack API endpoint
-            url = "http://api.aviationstack.com/v1/flights"
-            
-            async with aiohttp.ClientSession() as session:
-                # Search for outbound flights
-                params = {
-                    'access_key': self.aviationstack_key,
-                    'dep_iata': origin,
-                    'arr_iata': destination,
-                    'flight_date': start_date,
-                    'limit': 10
-                }
-                
-                async with session.get(url, params=params, timeout=self.api_config['flight']['timeout']) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        flights = self._parse_aviationstack_response(data, origin, destination, start_date, end_date, passengers)
-                        
-                        if flights:
-                            logger.info(f"✅ Fetched {len(flights)} real flights from Aviationstack")
-                            return flights
-                        else:
-                            logger.warning("No flights found in API response, using mock data")
-                            return self._generate_mock_flights(origin, destination, start_date, end_date, passengers)
-                    else:
-                        logger.warning(f"Aviationstack API error {response.status}, using mock data")
-                        return self._generate_mock_flights(origin, destination, start_date, end_date, passengers)
-        
-        except Exception as e:
-            logger.error(f"Error fetching flights from Aviationstack: {e}")
-            return self._generate_mock_flights(origin, destination, start_date, end_date, passengers)
-    
-    def _parse_aviationstack_response(self, data: Dict, origin: str, destination: str, start_date: str, end_date: str, passengers: int) -> List[Dict]:
-        """Parse Aviationstack API response into our format."""
-        flights = []
-        
-        if 'data' not in data or not data['data']:
-            return []
-        
-        # Take up to 3 flights
-        for flight_data in data['data'][:3]:
-            try:
-                flight_info = flight_data.get('flight', {})
-                departure = flight_data.get('departure', {})
-                arrival = flight_data.get('arrival', {})
-                airline = flight_data.get('airline', {})
-                
-                # Calculate estimated price (Aviationstack doesn't provide prices in free tier)
-                base_price = random.randint(300, 1500) * passengers
-                
-                flights.append({
-                    "flight_id": flight_info.get('iata', f"FL{random.randint(1000, 9999)}"),
-                    "airline": airline.get('name', 'Unknown Airline'),
-                    "aircraft": flight_data.get('aircraft', {}).get('registration', 'Unknown'),
-                    "outbound": {
-                        "departure": {
-                            "airport": departure.get('iata', origin),
-                            "time": departure.get('scheduled', start_date),
-                            "terminal": departure.get('terminal', 'N/A')
-                        },
-                        "arrival": {
-                            "airport": arrival.get('iata', destination),
-                            "time": arrival.get('scheduled', start_date),
-                            "terminal": arrival.get('terminal', 'N/A')
-                        },
-                        "duration_hours": 8,  # Estimated
-                        "stops": 0
-                    },
-                    "return": {
-                        "departure": {
-                            "airport": destination,
-                            "time": f"{end_date}T10:00:00Z",
-                            "terminal": "N/A"
-                        },
-                        "arrival": {
-                            "airport": origin,
-                            "time": f"{end_date}T18:00:00Z",
-                            "terminal": "N/A"
-                        },
-                        "duration_hours": 8,
-                        "stops": 0
-                    },
-                    "price": round(base_price, 2),
-                    "currency": "USD",
-                    "cabin_class": "Economy",
-                    "baggage_allowance": "20kg",
-                    "amenities": ["Meals", "Entertainment"],
-                    "carbon_emissions": 450.0,
-                    "booking_url": f"https://booking.com/flights"
-                })
-            except Exception as e:
-                logger.warning(f"Error parsing flight data: {e}")
-                continue
-        
-        return flights if flights else []
-    
-    async def _fetch_real_hotels(
-        self,
-        destination: str,
-        check_in: str,
-        check_out: str,
-        guests: int,
-        min_rating: float
-    ):
-        """Fetch real hotel data from Booking.com via RapidAPI."""
-        if not self.rapidapi_key:
-            logger.warning("RapidAPI key not found, using mock data")
-            return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                # Updated: Using booking-com15 API endpoint
-                search_url = "https://booking-com15.p.rapidapi.com/api/v1/hotels/searchDestination"
-                headers = {
-                    "X-RapidAPI-Key": self.rapidapi_key,
-                    "X-RapidAPI-Host": "booking-com15.p.rapidapi.com"
-                }
-                
-                params = {
-                    "query": destination
-                }
-                
-                async with session.get(search_url, headers=headers, params=params, timeout=self.api_config['hotel']['timeout']) as response:
-                    if response.status != 200:
-                        logger.warning(f"Booking.com API destination search error {response.status}, using mock data")
-                        return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-                    
-                    dest_data = await response.json()
-                    
-                    if not dest_data.get('data') or len(dest_data['data']) == 0:
-                        logger.warning("No destinations found, using mock data")
-                        return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-                    
-                    # Get the first destination result
-                    dest_id = dest_data['data'][0].get('dest_id')
-                
-                # Step 2: Search hotels at destination
-                hotels_url = "https://booking-com15.p.rapidapi.com/api/v1/hotels/searchHotels"
-                hotel_params = {
-                    "dest_id": dest_id,
-                    "search_type": "CITY",
-                    "arrival_date": check_in,
-                    "departure_date": check_out,
-                    "adults": guests,
-                    "room_qty": 1,
-                    "page_number": 1,
-                    "units": "metric",
-                    "temperature_unit": "c",
-                    "languagecode": "en-us",
-                    "currency_code": "USD"
-                }
-                
-                async with session.get(hotels_url, headers=headers, params=hotel_params, timeout=self.api_config['hotel']['timeout']) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        hotels = self._parse_booking15_response(data, check_in, check_out, min_rating)
-                        
-                        if hotels:
-                            logger.info(f"✅ Fetched {len(hotels)} real hotels from Booking.com")
-                            return hotels
-                        else:
-                            logger.warning("No hotels found in API response, using mock data")
-                            return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-                    else:
-                        error_text = await response.text()
-                        logger.warning(f"Booking.com API hotels search error {response.status}: {error_text[:200]}, using mock data")
-                        return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-        
-        except Exception as e:
-            logger.error(f"Error fetching hotels from Booking.com: {e}")
-            return self._generate_mock_hotels(destination, check_in, check_out, guests, min_rating)
-    
-    def _parse_booking15_response(self, data: Dict, check_in: str, check_out: str, min_rating: float) -> List[Dict]:
-        """Parse Booking.com15 API response into our format."""
-        hotels = []
-        
-        if 'data' not in data or 'hotels' not in data['data']:
-            return []
-        
-        check_in_dt = datetime.strptime(check_in, "%Y-%m-%d")
-        check_out_dt = datetime.strptime(check_out, "%Y-%m-%d")
-        nights = (check_out_dt - check_in_dt).days
-        
-        for hotel_data in data['data']['hotels'][:5]:
-            try:
-                # Extract rating (convert from 10-scale to 5-scale)
-                review_score = hotel_data.get('review_score', 0)
-                rating = round(review_score / 2, 1) if review_score else 4.0
-                
-                if rating < min_rating:
-                    continue
-                
-                # Extract price
-                price_breakdown = hotel_data.get('price_breakdown', {})
-                gross_price = float(price_breakdown.get('gross_price', {}).get('value', 100))
-                price_per_night = gross_price / max(nights, 1)
-                
-                # Extract location
-                location_data = hotel_data.get('property', {})
-                
-                hotels.append({
-                    "hotel_id": str(hotel_data.get('hotel_id', random.randint(1000, 9999))),
-                    "name": hotel_data.get('hotel_name', 'Unknown Hotel'),
-                    "type": hotel_data.get('accommodation_type_name', 'Hotel'),
-                    "rating": rating,
-                    "review_count": hotel_data.get('review_nr', 0),
-                    "location": {
-                        "address": location_data.get('address', 'N/A'),
-                        "city": location_data.get('city', 'Unknown'),
-                        "distance_to_center": round(float(hotel_data.get('distance_to_cc', 0)), 1),
-                        "coordinates": {
-                            "lat": float(location_data.get('latitude', 0)),
-                            "lng": float(location_data.get('longitude', 0))
-                        }
-                    },
-                    "price": {
-                        "per_night": round(price_per_night, 2),
-                        "total": round(gross_price, 2),
-                        "currency": price_breakdown.get('currency', 'USD'),
-                        "includes_tax": True
-                    },
-                    "room_type": hotel_data.get('unit_configuration_label', 'Standard Room'),
-                    "amenities": hotel_data.get('hotel_facilities', [])[:8],
-                    "policies": {
-                        "check_in": "14:00",
-                        "check_out": "11:00",
-                        "cancellation": "Check hotel policy"
-                    },
-                    "images": [hotel_data.get('main_photo_url', '')] if hotel_data.get('main_photo_url') else [],
-                    "booking_url": hotel_data.get('url', 'https://booking.com')
-                })
-            except Exception as e:
-                logger.warning(f"Error parsing hotel data: {e}")
-                continue
-        
-        return hotels if hotels else []
+
     
     async def _fetch_real_weather(self, destination: str, date: str):
         """Fetch real weather data from OpenWeatherMap API."""

@@ -83,7 +83,7 @@ class ItineraryAgent:
             },
             'transportation': {
                 'outbound_flight': self._format_flight_leg(selected['flight'], 'outbound') if selected['flight'] else None,
-                'return_flight': self._format_flight_leg(selected['flight'], 'return') if selected['flight'] else None
+                'return_flight': None  # Return flight is included in outbound_flight object
             },
             'accommodation': self._format_hotel(selected['hotel']) if selected['hotel'] else None,
             'activities': self._format_activities(selected['activities']),
@@ -321,16 +321,36 @@ class ItineraryAgent:
         return (end - start).days
     
     def _format_flight_leg(self, flight: Dict[str, Any], leg: str) -> Dict[str, Any]:
-        """Format flight leg information."""
-        leg_data = flight.get(leg, {})
+        """
+        Format flight leg information with all required fields for frontend display.
+        Returns the complete flight object with outbound/return structure.
+        """
+        # Return the entire flight object with all details
+        # The frontend expects: total_price, travel_class, carbon_emissions at top level
+        # Plus outbound and return objects with full details
         return {
-            'airline': flight.get('airline'),
-            'flight_number': flight.get('flight_id'),
-            'cabin_class': flight.get('cabin_class'),
-            'departure': leg_data.get('departure', {}),
-            'arrival': leg_data.get('arrival', {}),
-            'duration_hours': leg_data.get('duration_hours'),
-            'stops': leg_data.get('stops', 0)
+            'total_price': flight.get('total_price', flight.get('price', 0)),
+            'travel_class': flight.get('travel_class', flight.get('cabin_class', 'Economy')),
+            'carbon_emissions': flight.get('carbon_emissions', 0),
+            'airline': flight.get('airline', 'N/A'),
+            'airline_logo': flight.get('airline_logo', ''),
+            'flight_number': flight.get('flight_id', 'N/A'),
+            'price': flight.get('price', flight.get('total_price', 0)),
+            'cabin_class': flight.get('cabin_class', flight.get('travel_class', 'Economy')),
+            'booking_url': flight.get('booking_url', ''),
+            
+            # Complete outbound leg with all details
+            'outbound': flight.get('outbound', {}),
+            
+            # Complete return leg with all details  
+            'return': flight.get('return', {}),
+            
+            # Legacy fields for backward compatibility
+            'departure': flight.get('outbound', {}).get('departure', {}),
+            'arrival': flight.get('outbound', {}).get('arrival', {}),
+            'duration_hours': flight.get('outbound', {}).get('duration_hours', 0),
+            'stops': flight.get('outbound', {}).get('stops', 0),
+            'layovers': flight.get('outbound', {}).get('layovers', [])
         }
     
     def _format_hotel(self, hotel: Dict[str, Any]) -> Dict[str, Any]:

@@ -22,6 +22,7 @@ from backend.budget_optimizer import create_budget_optimizer
 from backend.itinerary_agent import create_itinerary_agent
 from backend.utils.logger import get_logger, log_agent_activity
 from backend.utils.validators import validate_request
+from backend.utils.airport_codes import get_airport_code
 
 logger = get_logger(__name__)
 
@@ -97,19 +98,43 @@ class TravelPlannerPipeline:
             start_date = request.get('start_date') or request.get('dates', {}).get('start')
             end_date = request.get('end_date') or request.get('dates', {}).get('end')
             
+            # Extract budget (handle both formats)
+            budget_value = request.get('budget')
+            if isinstance(budget_value, dict):
+                budget_value = budget_value.get('total', 2500)
+            elif budget_value is None:
+                budget_value = 2500
+            
+            # Extract comfort level for flight class
+            preferences_data = request.get('preferences', {})
+            comfort_level = preferences_data.get('comfort_level', 'standard')
+            
+            # Extract min hotel rating
+            min_hotel_rating = request.get('constraints', {}).get('hotel_rating_min', 3.5)
+            
+            # Convert city names to airport codes for flight API
+            origin_code = get_airport_code(request['origin'])
+            destination_code = get_airport_code(request['destination'])
+            
+            logger.info(f"✈️ Converting locations: {request['origin']} → {origin_code}, {request['destination']} → {destination_code}")
+            
             flights, hotels, weather_forecasts = await asyncio.gather(
                 self.api_manager.fetch_flights(
-                    request['origin'],
-                    request['destination'],
+                    origin_code,  # Use airport code
+                    destination_code,  # Use airport code
                     start_date,
                     end_date,
-                    request.get('group_size', 1)
+                    request.get('group_size', 1),
+                    budget_value * 0.35,  # Allocate 35% of budget to flights
+                    comfort_level  # Pass comfort level for cabin class
                 ),
                 self.api_manager.fetch_hotels(
                     request['destination'],
                     start_date,
                     end_date,
-                    request.get('group_size', 1)
+                    request.get('group_size', 1),
+                    min_hotel_rating,
+                    budget_value * 0.35  # Allocate 35% of budget to hotels
                 ),
                 self._fetch_weather_data(request)
             )

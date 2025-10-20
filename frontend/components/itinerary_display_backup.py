@@ -98,44 +98,92 @@ def display_itinerary_card(itinerary: Dict[str, Any]):
 
 
 def display_flight_card(flight: Dict[str, Any], flight_type: str):
-    """Display flight information card."""
+    """Display flight information card with airline logo."""
     
-    st.markdown(f"""
-    <div class="flight-card">
-        <p><strong>Airline:</strong> {flight.get('airline', 'N/A')}</p>
-        <p><strong>Flight:</strong> {flight.get('flight_number', 'N/A')}</p>
-        <p><strong>Class:</strong> {flight.get('cabin_class', 'Economy')}</p>
-        <hr>
-        <p>🛫 <strong>Departure:</strong> {flight['departure'].get('airport', 'N/A')}</p>
-        <p>🕐 {flight['departure'].get('time', 'N/A')}</p>
-        <p>📍 Terminal {flight['departure'].get('terminal', 'N/A')}</p>
-        <hr>
-        <p>🛬 <strong>Arrival:</strong> {flight['arrival'].get('airport', 'N/A')}</p>
-        <p>🕐 {flight['arrival'].get('time', 'N/A')}</p>
-        <p>📍 Terminal {flight['arrival'].get('terminal', 'N/A')}</p>
-        <hr>
-        <p>⏱️ <strong>Duration:</strong> {flight.get('duration_hours', 'N/A')} hours</p>
-        <p>🔄 <strong>Stops:</strong> {flight.get('stops', 0)}</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Display airline logo if available
+    airline_logo = flight.get('airline_logo', '')
+    airline_name = flight.get('airline', 'N/A')
+    
+    if airline_logo:
+        st.image(airline_logo, width=100, caption=airline_name)
+    else:
+        st.markdown(f"### {airline_name}")
+    
+    # Flight details
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="flight-card">
+            <p><strong>Flight:</strong> {flight.get('flight_number', 'N/A')}</p>
+            <p><strong>Class:</strong> {flight.get('cabin_class', 'Economy')}</p>
+            <p><strong>Aircraft:</strong> {flight.get('aircraft', 'N/A')}</p>
+            <hr>
+            <h4>🛫 Departure</h4>
+            <p><strong>Airport:</strong> {flight['departure'].get('airport', 'N/A')}</p>
+            <p><strong>Name:</strong> {flight['departure'].get('name', 'N/A')}</p>
+            <p><strong>Time:</strong> {flight['departure'].get('time', 'N/A')}</p>
+            <p><strong>Terminal:</strong> {flight['departure'].get('terminal', 'N/A')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="flight-card">
+            <p><strong>Duration:</strong> {flight.get('duration_hours', 'N/A')} hours</p>
+            <p><strong>Stops:</strong> {flight.get('stops', 0)}</p>
+            <p><strong>CO₂:</strong> {flight.get('carbon_emissions', 0)} kg</p>
+            <hr>
+            <h4>� Arrival</h4>
+            <p><strong>Airport:</strong> {flight['arrival'].get('airport', 'N/A')}</p>
+            <p><strong>Name:</strong> {flight['arrival'].get('name', 'N/A')}</p>
+            <p><strong>Time:</strong> {flight['arrival'].get('time', 'N/A')}</p>
+            <p><strong>Terminal:</strong> {flight['arrival'].get('terminal', 'N/A')}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Show layovers if any
+    if flight.get('layovers'):
+        with st.expander("🔄 Layover Details"):
+            for i, layover in enumerate(flight['layovers'], 1):
+                st.write(f"**Stop {i}:** {layover}")
 
 
 def display_hotel_card(hotel: Dict[str, Any]):
-    """Display hotel information card."""
+    """Display hotel information card with images."""
+    
+    # Display hotel images if available
+    images = hotel.get('images', [])
+    thumbnail = hotel.get('thumbnail', '')
+    
+    if images or thumbnail:
+        # Show first image or thumbnail
+        image_to_show = images[0] if images else thumbnail
+        if image_to_show:
+            st.image(image_to_show, caption=hotel['name'], use_container_width=True)
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown(f"### {hotel['name']}")
-        st.markdown(f"**⭐ Rating:** {hotel['rating']}/5.0")
+        st.markdown(f"**⭐ Rating:** {hotel['rating']}/5.0 ({hotel.get('review_count', 0)} reviews)")
+        st.markdown(f"**🏨 Type:** {hotel.get('type', 'Hotel')}")
         st.markdown(f"**📍 Location:** {hotel['location']['address']}")
         st.markdown(f"**🛏️ Room Type:** {hotel['room_type']}")
+        
+        # Show hotel class if available
+        if hotel.get('hotel_class'):
+            st.markdown(f"**⭐ Class:** {hotel['hotel_class']}")
+        
+        # Show eco certification
+        if hotel.get('eco_certified'):
+            st.markdown("**🌿 Eco-Certified**")
         
         if hotel.get('amenities'):
             st.markdown("**🎁 Amenities:**")
             # Display amenities in columns
             amenity_cols = st.columns(3)
-            for i, amenity in enumerate(hotel['amenities'][:9]):
+            for i, amenity in enumerate(hotel['amenities'][:12]):
                 with amenity_cols[i % 3]:
                     st.write(f"• {amenity}")
     
@@ -143,12 +191,24 @@ def display_hotel_card(hotel: Dict[str, Any]):
         st.markdown("### 💵 Pricing")
         st.metric("Per Night", f"${hotel['price']['per_night']:,.2f}")
         st.metric("Total", f"${hotel['price']['total']:,.2f}")
-        st.caption(f"For {hotel['price']['nights']} nights")
+        st.caption(f"For {hotel['price'].get('nights', 'N/A')} nights")
         
         st.markdown("### 📋 Policies")
         policies = hotel.get('policies', {})
         st.write(f"**Check-in:** {policies.get('check_in', 'N/A')}")
         st.write(f"**Check-out:** {policies.get('check_out', 'N/A')}")
+        
+        # Booking link
+        if hotel.get('booking_url'):
+            st.link_button("📖 View on Google", hotel['booking_url'])
+    
+    # Show more images if available
+    if len(images) > 1:
+        with st.expander("📸 View More Photos"):
+            img_cols = st.columns(3)
+            for i, img in enumerate(images[1:6]):  # Show up to 5 more images
+                with img_cols[i % 3]:
+                    st.image(img, use_container_width=True)
 
 
 def display_activities_grid(activities: List[Dict[str, Any]]):
