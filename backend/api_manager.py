@@ -139,8 +139,10 @@ class APIManager:
     ) -> List[Dict[str, Any]]:
         """
         Fetch real flight data from SERP API Google Flights.
-        Fetches OUTBOUND flights (origin → destination on start_date)
-        and RETURN flights (destination → origin on end_date) SEPARATELY.
+        Makes TWO SEPARATE API calls:
+        1. Outbound: origin → destination on start_date (one-way)
+        2. Return: destination → origin on end_date (one-way)
+        Then combines them into round-trip flight objects.
         """
         if not self.serpapi_key:
             logger.error("SERP API key not found")
@@ -157,60 +159,77 @@ class APIManager:
         
         try:
             async with aiohttp.ClientSession() as session:
-                # SERP API Google Flights endpoint
                 url = "https://serpapi.com/search.json"
                 
-                # Fetch outbound AND return flights with round-trip parameter
-                params = {
+                # STEP 1: Fetch OUTBOUND flights (origin → destination, one-way)
+                logger.info(f"📤 Fetching OUTBOUND flights: {origin} → {destination} on {start_date}")
+                outbound_params = {
                     'engine': 'google_flights',
                     'api_key': self.serpapi_key,
                     'departure_id': origin,
                     'arrival_id': destination,
                     'outbound_date': start_date,
-                    'return_date': end_date,
                     'currency': 'USD',
                     'hl': 'en',
                     'adults': passengers,
-                    'travel_class': travel_class,  # Use comfort level
-                    'type': '1'  # Round trip
+                    'travel_class': travel_class,
+                    'type': '2'  # One-way trip
                 }
                 
-                logger.info(f"Calling SERP API Google Flights: {origin} -> {destination} (outbound: {start_date}, return: {end_date}, class: {comfort_level})")
-                
-                async with session.get(url, params=params, timeout=30) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        # Debug: Log the response structure
-                        logger.debug(f"SERP API Response keys: {list(data.keys())}")
-                        if 'best_flights' in data:
-                            logger.debug(f"Found {len(data.get('best_flights', []))} best flights")
-                        if 'other_flights' in data:
-                            logger.debug(f"Found {len(data.get('other_flights', []))} other flights")
-                        if 'error' in data:
-                            logger.error(f"SERP API returned error: {data.get('error')}")
-                        
-                        flights = self._parse_serpapi_flights(data, passengers, budget, start_date, end_date, origin, destination)
-                        
-                        if flights:
-                            logger.info(f"✅ Fetched {len(flights)} round-trip flights from SERP API Google Flights")
-                            return flights
-                        else:
-                            logger.warning(f"No flights found in SERP API response for {origin} -> {destination}")
-                            logger.debug(f"SERP API full response: {str(data)[:500]}")
-                            return []
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"SERP API error {response.status}: {error_text[:200]}")
+                async with session.get(url, params=outbound_params, timeout=30) as response:
+                    if response.status != 200:
+                        logger.error(f"SERP API error fetching outbound: {response.status}")
                         return []
+                    outbound_data = await response.json()
+                
+                # STEP 2: Fetch RETURN flights (destination → origin, one-way)
+                logger.info(f"📥 Fetching RETURN flights: {destination} → {origin} on {end_date}")
+                return_params = {
+                    'engine': 'google_flights',
+                    'api_key': self.serpapi_key,
+                    'departure_id': destination,
+                    'arrival_id': origin,
+                    'outbound_date': end_date,  # Use outbound_date param for one-way
+                    'currency': 'USD',
+                    'hl': 'en',
+                    'adults': passengers,
+                    'travel_class': travel_class,
+                    'type': '2'  # One-way trip
+                }
+                
+                async with session.get(url, params=return_params, timeout=30) as response:
+                    if response.status != 200:
+                        logger.error(f"SERP API error fetching return: {response.status}")
+                        return []
+                    return_data = await response.json()
+                
+                # STEP 3: Combine outbound and return flights into round-trip options
+                flights = self._combine_oneway_flights(
+                    outbound_data, 
+                    return_data, 
+                    passengers, 
+                    budget, 
+                    start_date, 
+                    end_date, 
+                    origin, 
+                    destination
+                )
+                
+                if flights:
+                    logger.info(f"✅ Created {len(flights)} round-trip combinations from separate one-way flights")
+                    return flights
+                else:
+                    logger.warning(f"No flight combinations found for {origin} ↔ {destination}")
+                    return []
         
         except Exception as e:
             logger.error(f"Error fetching flights from SERP API: {e}", exc_info=True)
             return []
     
-    def _parse_serpapi_flights(
+    def _combine_oneway_flights(
         self,
-        data: Dict,
+        outbound_data: Dict,
+        return_data: Dict,
         passengers: int,
         budget: Optional[float] = None,
         start_date: str = None,
@@ -219,178 +238,184 @@ class APIManager:
         destination: str = None
     ) -> List[Dict[str, Any]]:
         """
-        Parse SERP API Google Flights response.
-        Extracts SEPARATE outbound and return flight details with logos.
+        Combine separate one-way flights into round-trip options.
+        Takes outbound flights (origin→destination) and return flights (destination→origin)
+        and creates all possible combinations.
         """
-        flights = []
+        combined_flights = []
         
-        # Get best flights or other flights
-        best_flights = data.get('best_flights', [])
-        other_flights = data.get('other_flights', [])
-        all_flights = best_flights + other_flights
+        # Get outbound flight options
+        outbound_best = outbound_data.get('best_flights', [])
+        outbound_other = outbound_data.get('other_flights', [])
+        all_outbound = (outbound_best + outbound_other)[:5]  # Limit to 5 outbound options
         
-        if not all_flights:
-            logger.warning("No flights found in SERP API data")
+        # Get return flight options  
+        return_best = return_data.get('best_flights', [])
+        return_other = return_data.get('other_flights', [])
+        all_return = (return_best + return_other)[:5]  # Limit to 5 return options
+        
+        if not all_outbound or not all_return:
+            logger.warning(f"Missing flights: {len(all_outbound)} outbound, {len(all_return)} return")
             return []
         
-        for flight_data in all_flights[:10]:  # Limit to 10 flights
-            try:
-                # Get price
-                price = float(flight_data.get('price', 0))
-                
-                # Apply budget filter if provided
-                if budget and price > budget:
+        logger.info(f"Combining {len(all_outbound)} outbound × {len(all_return)} return flights")
+        
+        # Create round-trip combinations
+        for out_flight in all_outbound:
+            for ret_flight in all_return:
+                try:
+                    # Calculate total price
+                    out_price = float(out_flight.get('price', 0))
+                    ret_price = float(ret_flight.get('price', 0))
+                    total_price = out_price + ret_price
+                    
+                    # Apply budget filter
+                    if budget and total_price > budget:
+                        continue
+                    
+                    # Parse outbound flight
+                    outbound_parsed = self._parse_oneway_flight(
+                        out_flight, 
+                        start_date, 
+                        origin, 
+                        destination,
+                        'outbound'
+                    )
+                    
+                    # Parse return flight
+                    return_parsed = self._parse_oneway_flight(
+                        ret_flight, 
+                        end_date, 
+                        destination, 
+                        origin,
+                        'return'
+                    )
+                    
+                    if not outbound_parsed or not return_parsed:
+                        continue
+                    
+                    # Combine into round-trip object
+                    combined_flight = {
+                        "flight_id": f"{outbound_parsed['flight_number']}_{return_parsed['flight_number']}",
+                        "airline": f"{outbound_parsed['airline']} / {return_parsed['airline']}" if outbound_parsed['airline'] != return_parsed['airline'] else outbound_parsed['airline'],
+                        "airline_logo": outbound_parsed.get('airline_logo', ''),
+                        "travel_class": outbound_parsed.get('travel_class', 'Economy'),
+                        "total_price": total_price,
+                        "currency": "USD",
+                        "carbon_emissions": out_flight.get('carbon_emissions', {}).get('this_flight', 0) + ret_flight.get('carbon_emissions', {}).get('this_flight', 0),
+                        
+                        # Complete outbound leg
+                        "outbound": outbound_parsed,
+                        
+                        # Complete return leg
+                        "return": return_parsed,
+                        
+                        # Legacy fields for compatibility
+                        "price": total_price,
+                        "cabin_class": outbound_parsed.get('travel_class', 'Economy'),
+                        "baggage_allowance": "Check with airline",
+                        "amenities": [],
+                        "booking_url": "https://www.google.com/travel/flights",
+                        "layover_duration": 0
+                    }
+                    
+                    combined_flights.append(combined_flight)
+                    
+                except Exception as e:
+                    logger.warning(f"Error combining flights: {e}")
                     continue
-                
-                # Get flight segments (legs)
-                flights_list = flight_data.get('flights', [])
-                if len(flights_list) < 2:
-                    continue  # Need both outbound and return
-                
-                # OUTBOUND: First segment(s) - from origin to destination
-                # Find where outbound ends (when we reach destination)
-                outbound_flights = []
-                return_flights = []
-                
-                collecting_outbound = True
-                for flight_segment in flights_list:
-                    arrival_id = flight_segment.get('arrival_airport', {}).get('id', '')
-                    departure_id = flight_segment.get('departure_airport', {}).get('id', '')
-                    
-                    if collecting_outbound:
-                        outbound_flights.append(flight_segment)
-                        # Check if we've reached destination
-                        if destination and destination.upper() in arrival_id.upper():
-                            collecting_outbound = False
-                    else:
-                        return_flights.append(flight_segment)
-                
-                # If we couldn't separate, use simple split
-                if not return_flights and len(outbound_flights) == len(flights_list):
-                    mid = len(flights_list) // 2
-                    outbound_flights = flights_list[:mid] if mid > 0 else flights_list[:1]
-                    return_flights = flights_list[mid:] if mid > 0 else flights_list[1:]
-                
-                # Get primary outbound flight details
-                outbound_main = outbound_flights[0] if outbound_flights else {}
-                outbound_last = outbound_flights[-1] if outbound_flights else outbound_main
-                
-                # Get primary return flight details
-                return_main = return_flights[0] if return_flights else {}
-                return_last = return_flights[-1] if return_flights else return_main
-                
-                # Outbound airline info
-                outbound_airline = outbound_main.get('airline', 'Unknown')
-                outbound_airline_logo = outbound_main.get('airline_logo', '')
-                outbound_flight_number = outbound_main.get('flight_number', 'N/A')
-                
-                # Return airline info (may be different!)
-                return_airline = return_main.get('airline', 'Unknown')
-                return_airline_logo = return_main.get('airline_logo', '')
-                return_flight_number = return_main.get('flight_number', 'N/A')
-                
-                # Calculate total duration for each leg
-                outbound_duration = sum(f.get('duration', 0) for f in outbound_flights)
-                return_duration = sum(f.get('duration', 0) for f in return_flights)
-                
-                # Get layovers for outbound
-                outbound_layovers = []
-                if len(outbound_flights) > 1:
-                    for f in outbound_flights[:-1]:
-                        layover_airport = f.get('arrival_airport', {}).get('name', 'Unknown')
-                        if layover_airport != 'Unknown':
-                            outbound_layovers.append(layover_airport)
-                
-                # Get layovers for return
-                return_layovers = []
-                if len(return_flights) > 1:
-                    for f in return_flights[:-1]:
-                        layover_airport = f.get('arrival_airport', {}).get('name', 'Unknown')
-                        if layover_airport != 'Unknown':
-                            return_layovers.append(layover_airport)
-                
-                # Extract departure/arrival info
-                outbound_departure = outbound_main.get('departure_airport', {})
-                outbound_arrival = outbound_last.get('arrival_airport', {})
-                return_departure = return_main.get('departure_airport', {})
-                return_arrival = return_last.get('arrival_airport', {})
-                
-                flights.append({
-                    "flight_id": f"{outbound_flight_number}_{return_flight_number}",
-                    "airline": f"{outbound_airline} / {return_airline}" if outbound_airline != return_airline else outbound_airline,
-                    "airline_logo": outbound_airline_logo,  # Primary logo
-                    "travel_class": outbound_main.get('travel_class', 'Economy'),
-                    "total_price": price,
-                    "currency": "USD",
-                    "carbon_emissions": flight_data.get('carbon_emissions', {}).get('this_flight', 0) or 0,
-                    
-                    # OUTBOUND LEG (on start_date)
-                    "outbound": {
-                        "date": start_date,
-                        "flight_number": outbound_flight_number,
-                        "airline": outbound_airline,
-                        "airline_logo": outbound_airline_logo,  # Outbound airline logo
-                        "aircraft": outbound_main.get('airplane', 'N/A'),
-                        "departure": {
-                            "airport": outbound_departure.get('id', origin or 'N/A'),
-                            "name": outbound_departure.get('name', 'N/A'),
-                            "time": outbound_departure.get('time', 'N/A'),
-                            "terminal": 'N/A'
-                        },
-                        "arrival": {
-                            "airport": outbound_arrival.get('id', destination or 'N/A'),
-                            "name": outbound_arrival.get('name', 'N/A'),
-                            "time": outbound_arrival.get('time', 'N/A'),
-                            "terminal": 'N/A'
-                        },
-                        "duration": outbound_duration,
-                        "duration_hours": outbound_duration // 60 if outbound_duration else 0,
-                        "stops": len(outbound_flights) - 1,
-                        "layovers": outbound_layovers
-                    },
-                    
-                    # RETURN LEG (on end_date)
-                    "return": {
-                        "date": end_date,
-                        "flight_number": return_flight_number,
-                        "airline": return_airline,
-                        "airline_logo": return_airline_logo,  # Return airline logo (may differ!)
-                        "aircraft": return_main.get('airplane', 'N/A'),
-                        "departure": {
-                            "airport": return_departure.get('id', destination or 'N/A'),
-                            "name": return_departure.get('name', 'N/A'),
-                            "time": return_departure.get('time', 'N/A'),
-                            "terminal": 'N/A'
-                        },
-                        "arrival": {
-                            "airport": return_arrival.get('id', origin or 'N/A'),
-                            "name": return_arrival.get('name', 'N/A'),
-                            "time": return_arrival.get('time', 'N/A'),
-                            "terminal": 'N/A'
-                        },
-                        "duration": return_duration,
-                        "duration_hours": return_duration // 60 if return_duration else 0,
-                        "stops": len(return_flights) - 1,
-                        "layovers": return_layovers
-                    },
-                    
-                    # Legacy fields for compatibility
-                    "price": price,
-                    "cabin_class": outbound_main.get('travel_class', 'Economy'),
-                    "baggage_allowance": "Check with airline",
-                    "amenities": [],
-                    "booking_url": f"https://www.google.com/travel/flights",
-                    "layover_duration": flight_data.get('layovers', [{}])[0].get('duration', 0) if flight_data.get('layovers') else 0
-                })
+        
+        # Sort by total price
+        combined_flights.sort(key=lambda x: x['total_price'])
+        
+        return combined_flights[:10]  # Return top 10 combinations
+    
+    def _parse_oneway_flight(
+        self,
+        flight_data: Dict,
+        date: str,
+        origin: str,
+        destination: str,
+        leg_type: str  # 'outbound' or 'return'
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Parse a single one-way flight from SERP API.
+        Handles multi-segment flights (with layovers).
+        Returns a complete flight leg object.
+        """
+        try:
+            # Get all flight segments for this one-way journey
+            segments = flight_data.get('flights', [])
+            if not segments:
+                logger.warning(f"No segments found for {leg_type} flight")
+                return None
             
-            except Exception as e:
-                logger.warning(f"Error parsing flight: {e}")
-                continue
-        
-        # Sort by price
-        flights.sort(key=lambda x: x['total_price'])
-        
-        return flights
+            # First segment (initial departure)
+            first_segment = segments[0]
+            # Last segment (final arrival)
+            last_segment = segments[-1]
+            
+            # Airline info from first segment
+            airline = first_segment.get('airline', 'Unknown')
+            airline_logo = first_segment.get('airline_logo', '')
+            flight_number = first_segment.get('flight_number', 'N/A')
+            
+            # Calculate total duration (sum of all segments)
+            total_duration = sum(seg.get('duration', 0) for seg in segments)
+            
+            # Get layover airports (all middle stops)
+            layovers = []
+            if len(segments) > 1:
+                for seg in segments[:-1]:  # All segments except last
+                    layover_airport = seg.get('arrival_airport', {}).get('name', 'Unknown')
+                    if layover_airport != 'Unknown':
+                        layovers.append(layover_airport)
+            
+            # Departure info (from first segment)
+            departure_airport = first_segment.get('departure_airport', {})
+            departure_id = departure_airport.get('id', origin)
+            departure_name = departure_airport.get('name', 'N/A')
+            departure_time = departure_airport.get('time', 'N/A')
+            
+            # Arrival info (from last segment)
+            arrival_airport = last_segment.get('arrival_airport', {})
+            arrival_id = arrival_airport.get('id', destination)
+            arrival_name = arrival_airport.get('name', 'N/A')
+            arrival_time = arrival_airport.get('time', 'N/A')
+            
+            # Build the flight leg object
+            flight_leg = {
+                "date": date,
+                "flight_number": flight_number,
+                "airline": airline,
+                "airline_logo": airline_logo,
+                "aircraft": first_segment.get('airplane', 'N/A'),
+                "travel_class": first_segment.get('travel_class', 'Economy'),
+                "departure": {
+                    "airport": departure_id,
+                    "name": departure_name,
+                    "time": departure_time,
+                    "terminal": 'N/A'
+                },
+                "arrival": {
+                    "airport": arrival_id,
+                    "name": arrival_name,
+                    "time": arrival_time,
+                    "terminal": 'N/A'
+                },
+                "duration": total_duration,
+                "duration_hours": total_duration // 60 if total_duration else 0,
+                "stops": len(segments) - 1,  # Number of stops
+                "layovers": layovers
+            }
+            
+            logger.debug(f"✅ Parsed {leg_type}: {departure_id}→{arrival_id}, {len(segments)} segments, {len(layovers)} layovers")
+            
+            return flight_leg
+            
+        except Exception as e:
+            logger.error(f"Error parsing {leg_type} flight: {e}")
+            return None
     
     async def _fetch_serpapi_hotels(
         self,
