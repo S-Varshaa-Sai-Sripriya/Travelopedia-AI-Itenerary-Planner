@@ -97,6 +97,7 @@ class TravelPlannerPipeline:
             # Extract dates from request (handle both formats)
             start_date = request.get('start_date') or request.get('dates', {}).get('start')
             end_date = request.get('end_date') or request.get('dates', {}).get('end')
+            logger.info(f"🗓️ Dates received: start={start_date}, end={end_date}")
             
             # Extract budget (handle both formats)
             budget_value = request.get('budget')

@@ -99,9 +99,19 @@ def main():
                 )
             
             with col2:
+                # Ensure all values are datetime.date for comparison
+                if isinstance(start_date, datetime):
+                    start_date = start_date.date()
+                if isinstance(min_date, datetime):
+                    min_date = min_date.date()
+                if isinstance(max_date, datetime):
+                    max_date = max_date.date()
+                default_end = start_date + timedelta(days=7)
+                if isinstance(default_end, datetime):
+                    default_end = default_end.date()
                 end_date = st.date_input(
                     "End Date",
-                    value=min_date + timedelta(days=35),
+                    value=min(max_date, max(default_end, start_date)),
                     min_value=start_date,
                     max_value=max_date
                 )
