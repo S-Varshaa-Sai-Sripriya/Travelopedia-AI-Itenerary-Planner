@@ -188,9 +188,6 @@ Edit `backend/utils/config.yaml` to customize:
 
 Sample input is provided in `backend/utils/sample_input.json` for testing the backend pipeline independently.
 
-## 🤝 Contributing
-
-This is a demonstration project showcasing AI orchestration and real-time travel planning capabilities.
 
 ## 📄 License
 
