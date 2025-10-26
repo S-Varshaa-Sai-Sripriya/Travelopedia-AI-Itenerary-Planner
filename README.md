@@ -46,7 +46,7 @@ ai-travel-planner/
 ./run.sh
 ```
 
-Then choose option 1 for the Web UI.
+Then choose option 1 for the Web UI
 
 ### Manual Setup
 
