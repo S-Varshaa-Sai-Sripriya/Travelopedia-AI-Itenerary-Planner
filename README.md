@@ -152,14 +152,16 @@ python tests/test_new_features.py
 - **Budget-based filtering** - Filters results by budget constraints
 
 ### Personalization GNN (`personalization_gnn.py`)
-- Graph Neural Network for user preferences
-- Historical behavior analysis
-- Contextual recommendations
+- **Graph-based preference modeling** - Models users, preferences, and destinations as interconnected nodes
+- **Activity scoring** - Ranks activities by matching user preferences (adventure, cultural, etc.) with ratings and budget
+- **Smart recommendations** - Scores activities on a 0-100 scale combining preference match (+30 points), ratings, and price level
+- **Cached embeddings** - 64-dimensional user vectors for fast similarity computations
 
 ### Budget Optimizer (`budget_optimizer.py`)
-- Pareto optimization for cost vs. comfort
-- Multiple itinerary options
-- Value scoring
+- **Pareto optimization** - Generates 3 alternatives (Budget/Standard/Comfort) exploring cost-quality tradeoffs
+- **Smart allocation** - Splits budget across 5 categories: transport (35%), accommodation (35%), food, activities, misc
+- **Value scoring** - Ranks options by quality-per-dollar (flights: stops penalty, hotels: rating/price, activities: personalization)
+- **Better recommendations** - Top-3 hit rate improvement through multi-objective optimization
 
 ### Itinerary Agent (`itinerary_agent.py`)
 - Consolidates all recommendations
