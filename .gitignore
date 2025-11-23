@@ -194,3 +194,5 @@ config.json
 # Kafka/Redis data
 kafka-logs/
 redis-data/
+
+travelopedia/
